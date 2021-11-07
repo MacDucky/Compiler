@@ -26,6 +26,7 @@ public:
         this->type = type;
         this->address = address;
         next = NULL;
+        //check git
     }
 
     friend class SymbolTable;
