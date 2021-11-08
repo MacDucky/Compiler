@@ -152,6 +152,10 @@ int main(int argc, char *argv[]) {
             e.message();
             exit(ERRORS::NO_FILE_IN_RANGE);
         }
+        fs::path orig_pfile_fullpath = base_dir / orig_pfile;
+
+        /* OPEN FILE HERE */
+
         std::cout << "Processing file 'myPcode" << std::to_string(i) << ".txt'..." << std::endl;
         try {
             my_pfile = fs::path(find_kth_in_cont(i, dict["my_pcode"].begin(), dict["my_pcode"].cend()));
@@ -160,7 +164,11 @@ int main(int argc, char *argv[]) {
             e.message();
             exit(ERRORS::NO_FILE_IN_RANGE);
         }
-        fs::path full_my_pfile_path = base_dir / my_pfile;
+        fs::path my_pfile_fullpath = base_dir / my_pfile;
+
+        /* OPEN FILE HERE */
+
+        /* COMPARE FILES HERE!*/
     }
 
 
