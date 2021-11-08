@@ -26,7 +26,6 @@ public:
         this->type = type;
         this->address = address;
         next = NULL;
-        //check git
     }
 
     friend class SymbolTable;
@@ -140,6 +139,11 @@ public:
     virtual void gencode(string c_type) {
         if (c_type == "codel") {
             cout << "ldc " << ST.find(id_name) << endl;
+        } else if (c_type == "coder") {
+            cout << "ldc " << ST.find(id_name) << endl;
+            cout << "ind" << endl;
+        } else {
+            throw "class Id accepts only codel/coder";
         }
     }
 };
@@ -166,21 +170,21 @@ public:
     virtual void gencode(string c_type) {
         cout << "ldc " << getValue() << endl;
     }
-}
+};
 
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
 /********************************************************   RUN/CONSTRUCTION ZONE   **************************************************/
-TreeNode* obj_tree(treenode *root);
+TreeNode *obj_tree(treenode *root);
 
 /*
 *	Input: Tree of objects 
 *	Output: prints the Pcode on the console
 */
-int code_recur(treenode * root) {
-    TreeNode * tree_root = obj_tree(root);
+int code_recur(treenode *root) {
+    TreeNode *tree_root = obj_tree(root);
     tree_root->gencode();
     return SUCCESS;
 
@@ -191,7 +195,7 @@ int code_recur(treenode * root) {
 *	Input: treenode (AST)
 *	Output: Tree of objects 
 */
-TreeNode *obj_tree(treenode * root) {
+TreeNode *obj_tree(treenode *root) {
     if_node *ifn;
     for_node *forn;
     leafnode *leaf;
@@ -214,7 +218,7 @@ TreeNode *obj_tree(treenode * root) {
                     *	leaf->data.sval->str
                     */
                 {
-                    TreeNode * ident = new Id(leaf->data.sval->str);
+                    TreeNode *ident = new Id(leaf->data.sval->str);
                     return ident;
                 }
 
@@ -242,7 +246,7 @@ TreeNode *obj_tree(treenode * root) {
                     *	leaf->data.ival
                     */
                 {
-                    TreeNode * const_number = new Num(leaf->data.ival);
+                    TreeNode *const_number = new Num(leaf->data.ival);
                     return const_number;
                 }
 
@@ -252,7 +256,7 @@ TreeNode *obj_tree(treenode * root) {
                     *	In order to get the real value you have to use:
                     *	leaf->data.dval
                     */
-                    TreeNode * real_number = new RealNum(leaf->data.dval);
+                    TreeNode *real_number = new RealNum(leaf->data.dval);
                     return real_number;
             }
             break;
@@ -554,7 +558,7 @@ TreeNode *obj_tree(treenode * root) {
                     if (root->hdr.tok == EQ) {
                         /* Regular assignment "=" */
                         /* e.g. x = 5; */
-                        TreeNode * ass_obj = new Assign();
+                        TreeNode *ass_obj = new Assign();
                         ass_obj->son1 = obj_tree(root->lnode);
                         ass_obj->son2 = obj_tree(root->rnode);
                         return ass_obj;
@@ -724,7 +728,7 @@ TreeNode *obj_tree(treenode * root) {
 *	Input: treenode (AST)
 *	Output: prints the Symbol Table on the console
 */
-void print_symbol_table(treenode * root) {
+void print_symbol_table(treenode *root) {
     printf("---------------------------------------\n");
     printf("Showing the Symbol Table:\n");
 
