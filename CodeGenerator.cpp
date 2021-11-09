@@ -187,7 +187,14 @@ public:
         cout << "sub " << endl;
     }
 };
-
+class Mul : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "mul " << endl;
+    }
+};
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
@@ -643,6 +650,7 @@ TreeNode *obj_tree(treenode *root) {
 
                         case STAR:
                             /* multiply token "*" */
+                            TreeNode *ass_obj = new Mul();
                             obj_tree(root->lnode);
                             obj_tree(root->rnode);
                             break;
