@@ -1,19 +1,23 @@
 #include <string>
 #include <filesystem>
 #include <list>
+#include <vector>
 #include <map>
 #include <exception>
 #include <iostream>
 #include <fstream>
 #include <utility>
+#include <regex>
 
 enum ERRORS {
     INSUFFICENT_PARAMS = 1, NO_FILE_IN_RANGE, DIFF_WAS_FOUND
 };
 
-using std::string;
 using std::list;
 using std::map;
+using std::string;
+using std::vector;
+#define BASE_VEC_SIZE 25
 
 class FileNotFoundInRange : public std::exception {
     std::string i;
@@ -23,24 +27,6 @@ public:
     void message() { std::cout << "File #" << i << " not found!" << std::endl; }
 };
 
-class FileDiffExc : public std::exception {
-public:
-    string file1;
-    string file2;
-    int line;
-    string final_message;
-
-    FileDiffExc(string file1, string file2, int line) : file1(std::move(file1)), file2(std::move(file2)), line(line) {
-        final_message =
-                "file: '" + file1 + "' and file: '" + file2 + "' ,differ in line: " + std::to_string(line) + "\n";
-    }
-};
-
-
-/*
- * e.g. Pcode1200.txt --> 1200
- * else -1
-*/
 const string &my_pcode_base = "myPcode";
 const string &my_output_base = "myoutput";
 const string &orig_pcode_base = "Pcode";
@@ -54,6 +40,10 @@ bool StrStartsWith(const string &to_search, const string &to_look_for) {
     return to_search.rfind(to_look_for, 0) == 0;
 }
 
+/*
+ * e.g. Pcode1200.txt --> 1200
+ * else -1
+*/
 int FindSubStrNum(const string &s) {
     size_t start_index = s.find_first_of("0123456789");
     if (start_index == string::npos)
@@ -67,6 +57,7 @@ int FindSubStrNum(const string &s) {
 }
 
 int main(int argc, char *argv[]) {
+    bool has_passed = true, missing_files = false;
     if (argc < 3) {
         std::cout << "A range < X Y > for testing must be given as an argument." << std::endl;
         exit(ERRORS::INSUFFICENT_PARAMS);
@@ -76,7 +67,9 @@ int main(int argc, char *argv[]) {
     int low_range = std::atoi(argv[1]), high_range = std::atoi(argv[2]);
 
     string path_to_data = "/mnt/c/Users/Dany/CLionProjects/Compilation/data";
-    std::list<string> my_output, orig_output, my_pcode, orig_pcode;
+    std::vector<string> my_output(BASE_VEC_SIZE, ""), orig_output(BASE_VEC_SIZE, ""), my_pcode(BASE_VEC_SIZE,
+                                                                                               ""), orig_pcode(
+            BASE_VEC_SIZE, "");
 
     for (const auto &abs_path: std::filesystem::directory_iterator(path_to_data)) {
         const string &full_abs_path = abs_path.path().string();
@@ -85,92 +78,118 @@ int main(int argc, char *argv[]) {
 
         /*my pcode*/
         if (StrStartsWith(base_filename, my_pcode_base)) {
-            my_pcode.insert(my_pcode.end(), base_filename);
+            my_pcode.at(FindSubStrNum(base_filename)) = base_filename;
         }
         /*orig pcode*/
         if (StrStartsWith(base_filename, orig_pcode_base)) {
-            orig_pcode.insert(orig_pcode.end(), base_filename);
+            orig_pcode.at(FindSubStrNum(base_filename)) = base_filename;
         }
         /*my output*/
         if (StrStartsWith(base_filename, my_output_base)) {
-            my_output.insert(my_output.end(), base_filename);
+            my_output.at(FindSubStrNum(base_filename)) = base_filename;
         }
         /*orig output*/
         if (StrStartsWith(base_filename, orig_output_base)) {
-            orig_output.insert(orig_output.end(), base_filename);
+            orig_output.at(FindSubStrNum(base_filename)) = base_filename;
         }
     }
-    my_output.sort();
-    orig_output.sort();
-    my_pcode.sort();
-    orig_pcode.sort();
 
-    map<string, list<string>> dict;
-    dict.insert(std::pair<string, list<string>>("my_output", my_output));
-    dict.insert(std::pair<string, list<string>>("orig_output", orig_output));
-    dict.insert(std::pair<string, list<string>>("my_pcode", my_pcode));
-    dict.insert(std::pair<string, list<string>>("orig_pcode", orig_pcode));
+    map<string, vector<string>> dict;
+    dict.insert(std::pair<string, vector<string>>("my_output", my_output));
+    dict.insert(std::pair<string, vector<string>>("orig_output", orig_output));
+    dict.insert(std::pair<string, vector<string>>("my_pcode", my_pcode));
+    dict.insert(std::pair<string, vector<string>>("orig_pcode", orig_pcode));
 
-    /* Printing processed filenames... */
+    /* Printing processed filenames... *//*
     for (const auto &begin: dict) {
         std::cout << "Printing '" + begin.first + "' files..." << std::endl;
         for (const auto &path: begin.second) {
-            std::cout << path << std::endl;
+            if (path != "")
+                std::cout << path << std::endl;
         }
-    }
-
-
-    auto find_kth_in_cont = [](int k, auto &&it, const auto &&it_end) {
-        int i = 1;
-        while (i <= k) {
-            if (it == it_end) {
-                throw FileNotFoundInRange(i);
-            }
-            if (i < k) {
-                i++;
-                it++;
-            } else
-                break;
-        }
-        return *it;
-    };
+    }*/
 
     namespace fs = std::filesystem;
 
     /* Compare outputs... */
     std::cout << "\nComparing Pcode in range: <" << std::to_string(low_range) << "," + std::to_string(high_range)
-              << ">..."
-              << std::endl;
+              << ">..." << std::endl << std::endl;
     fs::path base_dir(path_to_data);
+    list<int> failed_tests;
     for (int i = low_range; i <= high_range; ++i) {
         fs::path orig_pfile, my_pfile;
         std::cout << "Processing file 'Pcode" << std::to_string(i) << ".txt'..." << std::endl;
         try {
-            orig_pfile = fs::path(find_kth_in_cont(i, dict["orig_pcode"].begin(), dict["orig_pcode"].cend()));
+            orig_pfile = fs::path(dict["orig_pcode"].at(i));
         }
-        catch (FileNotFoundInRange &e) {
-            e.message();
+        catch (std::out_of_range &e) {
+            e.what();
             exit(ERRORS::NO_FILE_IN_RANGE);
         }
         fs::path orig_pfile_fullpath = base_dir / orig_pfile;
 
-        /* OPEN FILE HERE */
-
         std::cout << "Processing file 'myPcode" << std::to_string(i) << ".txt'..." << std::endl;
         try {
-            my_pfile = fs::path(find_kth_in_cont(i, dict["my_pcode"].begin(), dict["my_pcode"].cend()));
+            my_pfile = fs::path(dict["my_pcode"].at(i));
         }
-        catch (FileNotFoundInRange &e) {
-            e.message();
+        catch (std::out_of_range &e) {
+            e.what();
             exit(ERRORS::NO_FILE_IN_RANGE);
         }
         fs::path my_pfile_fullpath = base_dir / my_pfile;
 
-        /* OPEN FILE HERE */
+        if ((orig_pfile.string() == "" && my_pfile.string() != "") ||
+            ((orig_pfile.string() != "" && my_pfile.string() == ""))) {
+            std::cout << "File #" << i << " not found!" << std::endl << std::endl;
+            missing_files = true;
+            continue;
+        }
 
-        /* COMPARE FILES HERE!*/
+        std::cout << "Comparing files..." << std::endl << std::endl;
+        std::ifstream pcode_stream(orig_pfile_fullpath, std::ifstream::in);
+        std::ifstream mypcode_stream(my_pfile_fullpath, std::ifstream::in);
+        if (pcode_stream && mypcode_stream) {
+            int line = 1;
+            std::string line1, line2;
+            while (std::getline(pcode_stream, line1) && std::getline(mypcode_stream, line2)) {
+                if (line1 != line2) {
+                    /*
+                     * linux compilers are sensitive snowflakes
+                     * if you are on windows remove following lines
+                     */
+                    uint last1 = line1.length() - 1;
+                    uint last2 = line2.length() - 1;
+                    if (line1[last1] == '\r') {
+                        line1[last1] = '\0';
+                    }
+                    if (line2[last2] == '\r')
+                        line2[last2] = '\0';
+                    std::cout << "Line " << line << " does not match!" << std::endl;
+                    std::cout << "Difference:" << std::endl;
+                    std::cout << "Original pcode: '" << line1 << "'" << std::endl;
+                    std::cout << "My pcode: '" << line2 << "'" << std::endl;
+                    std::cout << "Test: " << i << " failed." << std::endl << std::endl;
+                    failed_tests.emplace_back(i);
+                    has_passed = false;
+                    break;
+                }
+                line++;
+            }
+        }
+        pcode_stream.close();
+        mypcode_stream.close();
     }
-
+    if (missing_files)
+        std::cout << "Warning: Some files in range not found!" << std::endl;
+    if (has_passed)
+        std::cout << "All compared files passed :)" << std::endl;
+    else {
+        std::cout << "Tests: ";
+        for (const auto &failedTest: failed_tests) {
+            std::cout << failedTest << " ";
+        }
+        std::cout << "have failed :(" << std::endl;
+    }
 
     return 0;
 }
