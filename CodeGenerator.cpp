@@ -195,6 +195,14 @@ public:
         cout << "mul " << endl;
     }
 };
+class Div : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "div " << endl;
+    }
+};
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
@@ -644,6 +652,7 @@ TreeNode *obj_tree(treenode *root) {
 
                         case DIV:
                             /* Divide token "/" */
+                            TreeNode *ass_obj = new Div();
                             obj_tree(root->lnode);
                             obj_tree(root->rnode);
                             break;
