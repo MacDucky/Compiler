@@ -179,7 +179,14 @@ public:
         cout << "add " << endl;
     }
 };
-
+class Minus : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "sub " << endl;
+    }
+};
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
@@ -623,6 +630,7 @@ TreeNode *obj_tree(treenode *root) {
 
                         case MINUS:
                             /* Minus token "-" */
+                            TreeNode *ass_obj = new Minus();
                             obj_tree(root->lnode);
                             obj_tree(root->rnode);
                             break;
