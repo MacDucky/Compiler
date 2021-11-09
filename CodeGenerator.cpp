@@ -171,6 +171,14 @@ public:
         cout << "ldc " << getValue() << endl;
     }
 };
+class Plus : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "add " << endl;
+    }
+};
 
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
@@ -608,8 +616,9 @@ TreeNode *obj_tree(treenode *root) {
 
                         case PLUS:
                             /* Plus token "+" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Plus();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case MINUS:
