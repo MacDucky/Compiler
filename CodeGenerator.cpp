@@ -203,6 +203,61 @@ public:
         cout << "div " << endl;
     }
 };
+class And : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "and " << endl;
+    }
+};
+class Or : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "or " << endl;
+    }
+};
+class Not : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        cout << "or " << endl;
+    }
+};
+class Equ : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "equ " << endl;
+    }
+};
+class Neq : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "neq " << endl;
+    }
+};
+class Grtr : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "grt" << endl;
+    }
+};
+class Les : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "les" << endl;
+    }
+};
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
@@ -646,64 +701,70 @@ TreeNode *obj_tree(treenode *root) {
                         case MINUS:
                             /* Minus token "-" */
                             TreeNode *ass_obj = new Minus();
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case DIV:
                             /* Divide token "/" */
                             TreeNode *ass_obj = new Div();
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case STAR:
                             /* multiply token "*" */
                             TreeNode *ass_obj = new Mul();
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case AND:
                             /* And token "&&" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new And();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case OR:
                             /* Or token "||" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Or();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case NOT:
                             /* Not token "!" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Not();
+                            ass_obj->son1=obj_tree(root->lnode);
                             break;
 
                         case GRTR:
                             /* Greater token ">" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Grtr();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case LESS:
                             /* Less token "<" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Les();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case EQUAL:
                             /* Equal token "==" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Equ();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case NOT_EQ:
                             /* Not equal token "!=" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Neq();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case LESS_EQ:
