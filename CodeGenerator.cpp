@@ -91,11 +91,13 @@ public:
         return (asciiSum % MAX);
     }
 
+    void print() const {
+        cout << "print() placeholder" << endl;
+    }
 };
 
 SymbolTable ST;
 
-/*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
 class TreeNode { //base class
 public:
     /*you can add another son nodes */
@@ -104,7 +106,7 @@ public:
 
     virtual ~TreeNode() {};
 
-    TreeNode() {};
+    TreeNode(TreeNode *left = NULL, TreeNode *right = NULL) : son1(left), son2(right) {};
 
     /*recursive function to make Pcode*/
     virtual void gencode(string c_type = "coder") {
@@ -112,6 +114,23 @@ public:
         if (son2 != NULL) son2->gencode(c_type);
     };
 
+};
+
+/*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
+TreeNode *obj_tree(treenode *root);
+
+/* Notice that this class expects rhs expressions. */
+class BinOp : public TreeNode {
+    string _op;
+public:
+    explicit BinOp(const string &pcode_op, treenode *left, treenode *right) : TreeNode(obj_tree(left), obj_tree(right)),
+                                                                              _op(pcode_op) {}
+
+    void gencode(string c_type) override {
+        if (son1 != NULL) son1->gencode("coder");
+        if (son2 != NULL) son2->gencode("coder");
+        cout << _op + " " << endl;
+    }
 };
 
 /*
@@ -151,9 +170,9 @@ public:
 class Num : public TreeNode {
     int value;
 public:
-    int getValue() { return value; }
+    int getValue() const { return value; }
 
-    Num(int number) { value = number; }
+    explicit Num(int number) { value = number; }
 
     virtual void gencode(string c_type) {
         cout << "ldc " << getValue() << endl;
@@ -171,151 +190,16 @@ public:
         cout << "ldc " << getValue() << endl;
     }
 };
-class Plus : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "add " << endl;
-    }
-};
-class Minus : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "sub " << endl;
-    }
-};
-class Mul : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "mul " << endl;
-    }
-};
-class Div : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "div " << endl;
-    }
-};
-class And : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "and " << endl;
-    }
-};
-class Or : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "or " << endl;
-    }
-};
-class Not : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        cout << "or " << endl;
-    }
-};
-class Equ : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "equ " << endl;
-    }
-};
-class Neq : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "neq " << endl;
-    }
-};
-class Grtr : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "grt" << endl;
-    }
-};
-class Les : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "les" << endl;
-    }
-};
-class Leq : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "leq" << endl;
-    }
-};
-class Geq : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder"); // return value
-        cout << "geq" << endl;
-    }
-};
-class Inc : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
-        if (son1 != NULL && son2==NULL)
-            {son1->gencode("coder"); // return value
-            cout << "inc" << endl;}
-        if (son1 == NULL && son2!=NULL)
-            {son2->gencode("coder"); // return value
-            cout << "inc" << endl;}
-        if (son1 != NULL && son2!=NULL)
-            {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder");
-         cout << "add " << endl;} // return value}
-    }
-};
-class Dec : public TreeNode {
-public:
-    virtual void gencode(string c_type) {
-        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
-        if (son1 != NULL && son2==NULL)
-            {son1->gencode("coder"); // return value
-            cout << "dec" << endl;}
-        if (son1 == NULL && son2!=NULL)
-            {son2->gencode("coder"); // return value
-            cout << "dec" << endl;}
-        if (son1 != NULL && son2!=NULL)
-            {
-        if (son1 != NULL) son1->gencode("coder"); // return value
-        if (son2 != NULL) son2->gencode("coder");
-         cout << "sub" << endl;} // return value}
-    }
-};
+
+
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
 /********************************************************   RUN/CONSTRUCTION ZONE   **************************************************/
-TreeNode *obj_tree(treenode *root);
+
 
 /*
-*	Input: Tree of objects 
+*	Input: Tree of objects
 *	Output: prints the Pcode on the console
 */
 int code_recur(treenode *root) {
@@ -328,7 +212,7 @@ int code_recur(treenode *root) {
 /*
 *	This recursive function is the main method for Code Generation
 *	Input: treenode (AST)
-*	Output: Tree of objects 
+*	Output: Tree of objects
 */
 TreeNode *obj_tree(treenode *root) {
     if_node *ifn;
@@ -731,9 +615,8 @@ TreeNode *obj_tree(treenode *root) {
 
                         case INCR:
                             /* Increment token "++" */
-                            TreeNode *ass_obj = new Geq();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
+                            obj_tree(root->lnode);
+                            obj_tree(root->rnode);
                             break;
 
                         case DECR:
@@ -742,95 +625,81 @@ TreeNode *obj_tree(treenode *root) {
                             obj_tree(root->rnode);
                             break;
 
-                        case PLUS:
+                        case PLUS: {
                             /* Plus token "+" */
-                            TreeNode *ass_obj = new Plus();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("add", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case MINUS:
-                            /* Minus token "-" */
-                            TreeNode *ass_obj = new Minus();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                        case MINUS: {/* Minus token "-" */
+                            TreeNode *bin_obj = new BinOp("sub", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case DIV:
-                            /* Divide token "/" */
-                            TreeNode *ass_obj = new Div();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                        case DIV: {/* Divide token "/" */
+                            TreeNode *bin_obj = new BinOp("div", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case STAR:
-                            /* multiply token "*" */
-                            TreeNode *ass_obj = new Mul();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                        case STAR: {/* multiply token "*" */
+                            TreeNode *bin_obj = new BinOp("mul", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case AND:
+                        case AND: {
                             /* And token "&&" */
-                            TreeNode *ass_obj = new And();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("and", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case OR:
+                        case OR: {
                             /* Or token "||" */
-                            TreeNode *ass_obj = new Or();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("or", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
+
 
                         case NOT:
                             /* Not token "!" */
-                            TreeNode *ass_obj = new Not();
-                            ass_obj->son1=obj_tree(root->lnode);
+                            obj_tree(root->lnode);
+                            obj_tree(root->rnode);
                             break;
 
-                        case GRTR:
+                        case GRTR: {
                             /* Greater token ">" */
-                            TreeNode *ass_obj = new Grtr();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("grt", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case LESS:
+                        case LESS: {
                             /* Less token "<" */
-                            TreeNode *ass_obj = new Les();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("les", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case EQUAL:
+                        case EQUAL: {
                             /* Equal token "==" */
-                            TreeNode *ass_obj = new Equ();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("equ", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case NOT_EQ:
+                        case NOT_EQ: {
                             /* Not equal token "!=" */
-                            TreeNode *ass_obj = new Neq();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("neq", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case LESS_EQ:
+                        case LESS_EQ: {
                             /* Less or equal token "<=" */
-                            TreeNode *ass_obj = new Leq();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("leq", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
-                        case GRTR_EQ:
+                        case GRTR_EQ: {
                             /* Greater or equal token ">=" */
-                            TreeNode *ass_obj = new Geq();
-                            ass_obj->son1=obj_tree(root->lnode);
-                            ass_obj->son2=obj_tree(root->rnode);
-                            break;
+                            TreeNode *bin_obj = new BinOp("geq", root->lnode, root->lnode);
+                            return bin_obj;
+                        }
 
                         default:
                             obj_tree(root->lnode);
@@ -880,7 +749,5 @@ void print_symbol_table(treenode *root) {
     printf("---------------------------------------\n");
     printf("Showing the Symbol Table:\n");
 
-    /*
-    *	add your code here
-    */
+    ST.print();
 }
