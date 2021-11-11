@@ -104,7 +104,10 @@ public:
     TreeNode *son1 = NULL;
     TreeNode *son2 = NULL;
 
-    virtual ~TreeNode() {};
+    virtual ~TreeNode() {
+        delete son1;
+        delete son2;
+    };
 
     TreeNode(TreeNode *left = NULL, TreeNode *right = NULL) : son1(left), son2(right) {};
 
@@ -151,8 +154,9 @@ public:
 
     Id(string id_n) {
         id_name = id_n;
-        ST.insert(id_name, "int", Stack_Address++,
-                  1); // you need to add the type and size according to declaration of identifier in AST
+        if (ST.find(id_n) == -1)
+            ST.insert(id_name, "int", Stack_Address++,
+                      1); // you need to add the type and size according to declaration of identifier in AST
     }
 
     virtual void gencode(string c_type) {
@@ -172,7 +176,7 @@ class Num : public TreeNode {
 public:
     int getValue() const { return value; }
 
-    explicit Num(int number) { value = number; }
+    explicit Num(int number) : TreeNode(), value(number) {}
 
     virtual void gencode(string c_type) {
         cout << "ldc " << getValue() << endl;
@@ -182,7 +186,7 @@ public:
 class RealNum : public TreeNode {
     double value;
 public:
-    RealNum(double value) : value(value) {}
+    RealNum(double value) : TreeNode(), value(value) {}
 
     double getValue() const { return value; }
 
@@ -191,6 +195,45 @@ public:
     }
 };
 
+class Inc : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
+        if (son1 != NULL && son2 == NULL) {
+            son1->gencode("coder"); // return value
+            cout << "inc" << endl;
+        }
+        if (son1 == NULL && son2 != NULL) {
+            son2->gencode("coder"); // return value
+            cout << "inc" << endl;
+        }
+        if (son1 != NULL && son2 != NULL) {
+            if (son1 != NULL) son1->gencode("coder"); // return value
+            if (son2 != NULL) son2->gencode("coder");
+            cout << "add " << endl;
+        } // return value}
+    }
+};
+
+class Dec : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
+        if (son1 != NULL && son2 == NULL) {
+            son1->gencode("coder"); // return value
+            cout << "dec" << endl;
+        }
+        if (son1 == NULL && son2 != NULL) {
+            son2->gencode("coder"); // return value
+            cout << "dec" << endl;
+        }
+        if (son1 != NULL && son2 != NULL) {
+            if (son1 != NULL) son1->gencode("coder"); // return value
+            if (son2 != NULL) son2->gencode("coder");
+            cout << "sub" << endl;
+        } // return value}
+    }
+};
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
@@ -205,8 +248,8 @@ public:
 int code_recur(treenode *root) {
     TreeNode *tree_root = obj_tree(root);
     tree_root->gencode();
+    delete tree_root;
     return SUCCESS;
-
 }
 
 /*
@@ -237,8 +280,8 @@ TreeNode *obj_tree(treenode *root) {
                     *	leaf->data.sval->str
                     */
                 {
-                    TreeNode *ident = new Id(leaf->data.sval->str);
-                    return ident;
+                    string s = leaf->data.sval->str;
+                    return new Id(s);
                 }
 
 
@@ -470,11 +513,12 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_STEMNT:
+                case TN_STEMNT: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
-                    break;
+                }
+//                    break;
 
                 case TN_BIT_FIELD:
                     /* Maybe you will use it later */
