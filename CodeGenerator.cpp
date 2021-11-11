@@ -136,6 +136,10 @@ public:
     }
 };
 
+class AssignBinOp: public BinOp{
+    explicit(const string& op, ){}
+};
+
 /*
 * you have to add functions/implement of gencode()... of derived classes
 */
@@ -211,17 +215,14 @@ public:
         /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
         if (son1 != NULL && son2 == NULL) {
             son1->gencode("coder"); // return value
-            cout << "inc" << endl;
+            cout << "inc 1" << endl;
+            cout << "sto" << endl;
         }
         if (son1 == NULL && son2 != NULL) {
             son2->gencode("coder"); // return value
-            cout << "inc" << endl;
+            cout << "inc 1" << endl;
+            cout << "sto" << endl;
         }
-        if (son1 != NULL && son2 != NULL) {
-            if (son1 != NULL) son1->gencode("coder"); // return value
-            if (son2 != NULL) son2->gencode("coder");
-            cout << "add " << endl;
-        } // return value}
     }
 };
 
@@ -231,17 +232,15 @@ public:
         /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
         if (son1 != NULL && son2 == NULL) {
             son1->gencode("coder"); // return value
-            cout << "dec" << endl;
+            cout << "dec 1" << endl;
+            cout << "sto" << endl;
         }
         if (son1 == NULL && son2 != NULL) {
             son2->gencode("coder"); // return value
-            cout << "dec" << endl;
+            cout << "dec 1" << endl;
+            cout << "sto" << endl;
         }
-        if (son1 != NULL && son2 != NULL) {
-            if (son1 != NULL) son1->gencode("coder"); // return value
-            if (son2 != NULL) son2->gencode("coder");
-            cout << "sub" << endl;
-        } // return value}
+
     }
 };
 
@@ -249,7 +248,7 @@ class Not : public TreeNode {
 public:
     virtual void gencode(string c_type) {
         if (son1 != NULL) son1->gencode("coder"); // return value
-        cout << "not " << endl;
+        cout << "not" << endl;
     }
 };
 
@@ -678,17 +677,21 @@ TreeNode *obj_tree(treenode *root) {
                             obj_tree(root->rnode);
                             break;
 
-                        case INCR:
+                        case INCR: {
                             /* Increment token "++" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
-                            break;
+                            TreeNode *inc_obj = new Inc();
+                            inc_obj->son1 = obj_tree(root->lnode);
+                            inc_obj->son2 = obj_tree(root->rnode);
+                            return inc_obj;
+                        }
 
-                        case DECR:
+                        case DECR: {
                             /* Decrement token "--" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
-                            break;
+                            TreeNode *dec_obj = new Dec();
+                            dec_obj->son1 = obj_tree(root->lnode);
+                            dec_obj->son2 = obj_tree(root->rnode);
+                            return dec_obj;
+                        }
 
                         case PLUS: {
                             /* Plus token "+" */

@@ -5,3 +5,4 @@ CMakeLists.txt
 /compiler.exe
 .vscode
 tests/test
+/cmake-build-debug_mingw/
