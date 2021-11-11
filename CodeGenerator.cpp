@@ -149,27 +149,45 @@ public:
 };
 
 class Id : public TreeNode {
-public:
     string id_name;
+    static bool is_func_label;  // true when it's a func
+    bool is_pre_decl_gencode;   //
+public:
 
     Id(string id_n) {
         id_name = id_n;
-        if (ST.find(id_n) == -1)
-            ST.insert(id_name, "int", Stack_Address++,
-                      1); // you need to add the type and size according to declaration of identifier in AST
+        if (ST.find(id_n) == -1) {
+            // todo: temporary fix for label, is it even needed?
+            if (!is_func_label) {
+                // you need to add the type and size according to declaration of identifier in AST
+                ST.insert(id_name, "int", Stack_Address++, 1);
+                is_pre_decl_gencode = true;
+            } else
+                is_func_label = false;
+        }
     }
 
     virtual void gencode(string c_type) {
-        if (c_type == "codel") {
-            cout << "ldc " << ST.find(id_name) << endl;
-        } else if (c_type == "coder") {
-            cout << "ldc " << ST.find(id_name) << endl;
-            cout << "ind" << endl;
+        if (is_pre_decl_gencode) {
+            is_pre_decl_gencode = false;
         } else {
-            throw "class Id accepts only codel/coder";
+            if (c_type == "codel") {
+                cout << "ldc " << ST.find(id_name) << endl;
+            } else if (c_type == "coder") {
+                cout << "ldc " << ST.find(id_name) << endl;
+                cout << "ind" << endl;
+            } else {
+                throw "class Id accepts only codel/coder";
+            }
         }
     }
+
+    static void setIsLabel() {
+        is_func_label = true;
+    }
 };
+
+bool Id::is_func_label = false;
 
 class Num : public TreeNode {
     int value;
@@ -232,6 +250,14 @@ public:
             if (son2 != NULL) son2->gencode("coder");
             cout << "sub" << endl;
         } // return value}
+    }
+};
+
+class Not : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        cout << "not " << endl;
     }
 };
 
@@ -402,17 +428,17 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_TRANS_LIST:
+                case TN_TRANS_LIST: {
                     /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+//                    Id::setIsLabel();
+                    return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
+                }
 
-                case TN_FUNC_DECL:
+                case TN_FUNC_DECL: {
                     /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    Id::setIsLabel();
+                    return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
+                }
 
                 case TN_FUNC_CALL:
                     /* Function call */
@@ -429,11 +455,12 @@ TreeNode *obj_tree(treenode *root) {
                     }
                     break;
 
-                case TN_BLOCK:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_BLOCK: {/* Maybe you will use it later */
+                    TreeNode *t = new TreeNode();
+                    t->son1 = obj_tree(root->lnode);
+                    t->son2 = obj_tree(root->rnode);
+                    return t;
+                }
 
                 case TN_ARRAY_DECL:
                     /* array declaration - for HW2 */
@@ -477,11 +504,12 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_TYPE_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_TYPE_LIST: {
+                    TreeNode *t = new TreeNode();
+                    t->son1 = obj_tree(root->lnode);
+                    t->son2 = obj_tree(root->rnode);
+                    return t;
+                }
 
                 case TN_COMP_DECL:
                     /* struct component declaration - for HW2 */
@@ -489,11 +517,13 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_DECL:
-                    /* structs declaration - for HW2 */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_DECL: {   /* structs declaration - for HW2 */
+                    // Dany: for future use.
+                    if (root->lnode->hdr.type == TN_TYPE_LIST) { // var type
+                        string var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
+                    }
+                    return new TreeNode(NULL, obj_tree(root->rnode));
+                }
 
                 case TN_DECL_LIST:
                     /* Maybe you will use it later */
@@ -507,18 +537,16 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(root->rnode);
                     break;
 
-                case TN_STEMNT_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                case TN_STEMNT_LIST: {/* Maybe you will use it later */
+                    return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
+                }
 
                 case TN_STEMNT: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
+                    break;
                 }
-//                    break;
 
                 case TN_BIT_FIELD:
                     /* Maybe you will use it later */
@@ -703,11 +731,12 @@ TreeNode *obj_tree(treenode *root) {
                         }
 
 
-                        case NOT:
-                            /* Not token "!" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
-                            break;
+                        case NOT: {/* Not token "!" */
+                            TreeNode *not_obj = new Not();
+                            not_obj->son1 = obj_tree(root->lnode);
+                            not_obj->son2 = obj_tree(root->rnode);
+                            return not_obj;
+                        }
 
                         case GRTR: {
                             /* Greater token ">" */

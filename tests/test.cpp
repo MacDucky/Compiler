@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
             std::cout << failedTest << " ";
         }
         std::cout << "have failed :(" << std::endl;
+        return ERRORS::DIFF_WAS_FOUND;
     }
-
     return 0;
 }
