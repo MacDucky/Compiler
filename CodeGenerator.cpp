@@ -258,6 +258,56 @@ public:
         cout << "les" << endl;
     }
 };
+class Leq : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "leq" << endl;
+    }
+};
+class Geq : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
+        cout << "geq" << endl;
+    }
+};
+class Inc : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
+        if (son1 != NULL && son2==NULL)
+            {son1->gencode("coder"); // return value
+            cout << "inc" << endl;}
+        if (son1 == NULL && son2!=NULL)
+            {son2->gencode("coder"); // return value
+            cout << "inc" << endl;}
+        if (son1 != NULL && son2!=NULL)
+            {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder");
+         cout << "add " << endl;} // return value}
+    }
+};
+class Dec : public TreeNode {
+public:
+    virtual void gencode(string c_type) {
+        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
+        if (son1 != NULL && son2==NULL)
+            {son1->gencode("coder"); // return value
+            cout << "dec" << endl;}
+        if (son1 == NULL && son2!=NULL)
+            {son2->gencode("coder"); // return value
+            cout << "dec" << endl;}
+        if (son1 != NULL && son2!=NULL)
+            {
+        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder");
+         cout << "sub" << endl;} // return value}
+    }
+};
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
@@ -681,8 +731,9 @@ TreeNode *obj_tree(treenode *root) {
 
                         case INCR:
                             /* Increment token "++" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Geq();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case DECR:
@@ -769,14 +820,16 @@ TreeNode *obj_tree(treenode *root) {
 
                         case LESS_EQ:
                             /* Less or equal token "<=" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Leq();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         case GRTR_EQ:
                             /* Greater or equal token ">=" */
-                            obj_tree(root->lnode);
-                            obj_tree(root->rnode);
+                            TreeNode *ass_obj = new Geq();
+                            ass_obj->son1=obj_tree(root->lnode);
+                            ass_obj->son2=obj_tree(root->rnode);
                             break;
 
                         default:
