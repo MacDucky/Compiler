@@ -112,7 +112,7 @@ public:
     TreeNode(TreeNode *left = NULL, TreeNode *right = NULL) : son1(left), son2(right) {};
 
     /*recursive function to make Pcode*/
-    virtual void gencode(string c_type = "coder") {
+    virtual void gencode(string c_type = "") {
         if (son1 != NULL) son1->gencode(c_type);
         if (son2 != NULL) son2->gencode(c_type);
     };
@@ -132,7 +132,7 @@ public:
     void gencode(string c_type) override {
         if (son1 != NULL) son1->gencode("coder");
         if (son2 != NULL) son2->gencode("coder");
-        cout << _op + " " << endl;
+        cout << _op << endl;
     }
 };
 
@@ -151,7 +151,6 @@ public:
 class Id : public TreeNode {
     string id_name;
     static bool is_func_label;  // true when it's a func
-    bool is_pre_decl_gencode;   //
 public:
 
     Id(string id_n) {
@@ -161,28 +160,21 @@ public:
             if (!is_func_label) {
                 // you need to add the type and size according to declaration of identifier in AST
                 ST.insert(id_name, "int", Stack_Address++, 1);
-                is_pre_decl_gencode = true;
             } else
                 is_func_label = false;
         }
     }
 
     virtual void gencode(string c_type) {
-        if (is_pre_decl_gencode) {
-            is_pre_decl_gencode = false;
-        } else {
-            if (c_type == "codel") {
-                cout << "ldc " << ST.find(id_name) << endl;
-            } else if (c_type == "coder") {
-                cout << "ldc " << ST.find(id_name) << endl;
-                cout << "ind" << endl;
-            } else {
-                throw "class Id accepts only codel/coder";
-            }
+        if (c_type == "codel") {
+            cout << "ldc " << ST.find(id_name) << endl;
+        } else if (c_type == "coder") {
+            cout << "ldc " << ST.find(id_name) << endl;
+            cout << "ind" << endl;
         }
     }
 
-    static void setIsLabel() {
+    static void setIsFuncLabel() {
         is_func_label = true;
     }
 };
@@ -430,13 +422,13 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_TRANS_LIST: {
                     /* Maybe you will use it later */
-//                    Id::setIsLabel();
+//                    Id::setIsFuncLabel();
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
                 case TN_FUNC_DECL: {
                     /* Maybe you will use it later */
-                    Id::setIsLabel();
+                    Id::setIsFuncLabel();
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
@@ -519,8 +511,9 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_DECL: {   /* structs declaration - for HW2 */
                     // Dany: for future use.
+                    string var_type;
                     if (root->lnode->hdr.type == TN_TYPE_LIST) { // var type
-                        string var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
+                        var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
                     }
                     return new TreeNode(NULL, obj_tree(root->rnode));
                 }
@@ -699,34 +692,34 @@ TreeNode *obj_tree(treenode *root) {
 
                         case PLUS: {
                             /* Plus token "+" */
-                            TreeNode *bin_obj = new BinOp("add", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("add", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case MINUS: {/* Minus token "-" */
-                            TreeNode *bin_obj = new BinOp("sub", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("sub", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case DIV: {/* Divide token "/" */
-                            TreeNode *bin_obj = new BinOp("div", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("div", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case STAR: {/* multiply token "*" */
-                            TreeNode *bin_obj = new BinOp("mul", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("mul", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case AND: {
                             /* And token "&&" */
-                            TreeNode *bin_obj = new BinOp("and", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("and", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case OR: {
                             /* Or token "||" */
-                            TreeNode *bin_obj = new BinOp("or", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("or", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
@@ -740,37 +733,37 @@ TreeNode *obj_tree(treenode *root) {
 
                         case GRTR: {
                             /* Greater token ">" */
-                            TreeNode *bin_obj = new BinOp("grt", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("grt", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case LESS: {
                             /* Less token "<" */
-                            TreeNode *bin_obj = new BinOp("les", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("les", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case EQUAL: {
                             /* Equal token "==" */
-                            TreeNode *bin_obj = new BinOp("equ", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("equ", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case NOT_EQ: {
                             /* Not equal token "!=" */
-                            TreeNode *bin_obj = new BinOp("neq", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("neq", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case LESS_EQ: {
                             /* Less or equal token "<=" */
-                            TreeNode *bin_obj = new BinOp("leq", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("leq", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
                         case GRTR_EQ: {
                             /* Greater or equal token ">=" */
-                            TreeNode *bin_obj = new BinOp("geq", root->lnode, root->lnode);
+                            TreeNode *bin_obj = new BinOp("geq", root->lnode, root->rnode);
                             return bin_obj;
                         }
 
