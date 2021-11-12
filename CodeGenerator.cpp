@@ -255,7 +255,7 @@ public:
 class Not : public TreeNode {
 public:
     virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder"); // return value
+        if (son2 != NULL) son2->gencode("coder"); // return value
         cout << "not" << endl;
     }
 };
@@ -429,13 +429,12 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_TRANS_LIST: {
                     /* Maybe you will use it later */
-//                    Id::setIsFuncLabel();
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
                 case TN_FUNC_DECL: {
                     /* Maybe you will use it later */
-                    Id::setIsFuncLabel();
+                    Id::setIsFuncLabel();   // temporary patch to **NOT** add func labels.
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
