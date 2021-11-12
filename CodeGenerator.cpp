@@ -124,6 +124,7 @@ TreeNode *obj_tree(treenode *root);
 
 /* Notice that this class expects rhs expressions. */
 class BinOp : public TreeNode {
+protected:
     string _op;
 public:
     explicit BinOp(const string &pcode_op, treenode *left, treenode *right) : TreeNode(obj_tree(left), obj_tree(right)),
@@ -136,8 +137,15 @@ public:
     }
 };
 
-class AssignBinOp: public BinOp{
-    explicit(const string& op, ){}
+class AssignBinOp : public BinOp {
+public:
+    explicit AssignBinOp(const string &op, treenode *lnode, treenode *rnode) : BinOp(op, lnode, rnode) {}
+
+    void gencode(string c_type) override {
+        if (son1 != NULL) son1->gencode("codel");
+        BinOp::gencode("");
+        cout << "sto" << endl;
+    }
 };
 
 /*
@@ -649,23 +657,19 @@ TreeNode *obj_tree(treenode *root) {
                     } else if (root->hdr.tok == PLUS_EQ) {
                         /* Plus equal assignment "+=" */
                         /* e.g. x += 5; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        return new AssignBinOp("add", root->lnode, root->rnode);
                     } else if (root->hdr.tok == MINUS_EQ) {
                         /* Minus equal assignment "-=" */
                         /* e.g. x -= 5; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        return new AssignBinOp("sub", root->lnode, root->rnode);
                     } else if (root->hdr.tok == STAR_EQ) {
                         /* Multiply equal assignment "*=" */
                         /* e.g. x *= 5; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        return new AssignBinOp("mul", root->lnode, root->rnode);
                     } else if (root->hdr.tok == DIV_EQ) {
                         /* Divide equal assignment "/=" */
                         /* e.g. x /= 5; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        return new AssignBinOp("div", root->lnode, root->rnode);
                     }
                     break;
 
