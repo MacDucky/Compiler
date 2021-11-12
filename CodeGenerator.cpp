@@ -132,12 +132,34 @@ public:
     }
 };
 
+class While : public TreeNode {
+    static int _while_loop_label_idx;
+    static int _while_end_idx;
+public:
+    While(treenode *cond, treenode *dostuff) : TreeNode(obj_tree(cond), obj_tree(dostuff)) {}
+
+    void gencode(string c_type) override {
+        const string &while_loop_label("while_loop" + to_string(_while_loop_label_idx++));
+        const string &while_end_label("while_end" + to_string(_while_end_idx++));
+        cout << while_loop_label + ":" << endl;
+        son1->gencode("coder");
+        cout << "fjp " + while_end_label << endl;
+        son2->gencode("coder");
+        cout << "ujp " + while_loop_label << endl;
+        cout << while_end_label + ":" << endl;
+    }
+};
+
+int While::_while_loop_label_idx = 0;
+int While::_while_end_idx = 0;
+
+
 class If : public TreeNode {
     TreeNode *_else_do;
 
-    static int _if_end_label;
-    static int _ifelse_else_label;
-    static int _ifelse_end_label;
+    static int _if_end_label_idx;
+    static int _ifelse_else_label_idx;
+    static int _ifelse_end_label_idx;
 public:
     If(treenode *cond, treenode *thenDo, treenode *elseDo = NULL) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
                                                                     _else_do(obj_tree(elseDo)) {}
@@ -151,7 +173,7 @@ public:
         if (!_else_do) {// simple if case.
             if (son1 && son2) {
                 son1->gencode("coder");
-                const string &ifend_label("if_end" + to_string(_if_end_label++));
+                const string &ifend_label("if_end" + to_string(_if_end_label_idx++));
                 cout << "fjp " + ifend_label << endl;
                 son2->gencode("coder");
                 cout << ifend_label + ":" << endl;
@@ -160,8 +182,8 @@ public:
             }
         } else {// if else case.
             son1->gencode("coder");
-            const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label++));
-            const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label++));
+            const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label_idx++));
+            const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label_idx++));
             cout << "fjp " + ifelse_else_label << endl;
             son2->gencode("coder");
             cout << "ujp " + ifelse_end_label << endl;
@@ -172,9 +194,9 @@ public:
     }
 };
 
-int If::_if_end_label = 0;
-int If::_ifelse_else_label = 0;
-int If::_ifelse_end_label = 0;
+int If::_if_end_label_idx = 0;
+int If::_ifelse_else_label_idx = 0;
+int If::_ifelse_end_label_idx = 0;
 
 
 /* Notice that this class expects rhs expressions. */
@@ -189,8 +211,7 @@ public:
         if (!son1 && son2) { //only case is when its ' -x '
             son2->gencode("coder");
             cout << "neg" << endl;
-        }
-        else{
+        } else {
             if (son1 != NULL) son1->gencode("coder");
             if (son2 != NULL) son2->gencode("coder");
             cout << _op << endl;
@@ -318,7 +339,8 @@ public:
 class Not : public TreeNode {
 public:
     virtual void gencode(string c_type) {
-        if (son2 != NULL) son2->gencode("coder"); // return value
+        if (!son1 && son2) son2->gencode("coder"); // return value
+        else throw "something wrong with AST node to TreeNode construction!\n";
         cout << "not" << endl;
     }
 };
@@ -841,9 +863,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_WHILE:
                     /* While case */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    return new While(root->lnode, root->rnode);
 
                 case TN_DOWHILE:
                     /* Do-While case */
