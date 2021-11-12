@@ -122,6 +122,16 @@ public:
 /*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
 TreeNode *obj_tree(treenode *root);
 
+class Print : public TreeNode {
+public:
+    explicit Print(treenode *rr_node) : TreeNode(NULL, obj_tree(rr_node)) {}
+
+    void gencode(string c_type) override {
+        if (son2) son2->gencode("coder");
+        cout << "print" << endl;
+    }
+};
+
 /* Notice that this class expects rhs expressions. */
 class BinOp : public TreeNode {
 protected:
@@ -445,7 +455,7 @@ TreeNode *obj_tree(treenode *root) {
                         /* The expression that you need to print is located in */
                         /* the currentNode->right->right sub tree */
                         /* Look at the output AST structure! */
-                        obj_tree(root->rnode->rnode);
+                        return new Print(root->rnode->rnode);
                     } else {
                         /* other function calls - for HW3 */
                         obj_tree(root->lnode);
