@@ -186,9 +186,15 @@ public:
                                                                               _op(pcode_op) {}
 
     void gencode(string c_type) override {
-        if (son1 != NULL) son1->gencode("coder");
-        if (son2 != NULL) son2->gencode("coder");
-        cout << _op << endl;
+        if (!son1 && son2) { //only case is when its ' -x '
+            son2->gencode("coder");
+            cout << "neg" << endl;
+        }
+        else{
+            if (son1 != NULL) son1->gencode("coder");
+            if (son2 != NULL) son2->gencode("coder");
+            cout << _op << endl;
+        }
     }
 };
 
