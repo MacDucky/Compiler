@@ -132,6 +132,51 @@ public:
     }
 };
 
+class If : public TreeNode {
+    TreeNode *_else_do;
+
+    static int _if_end_label;
+    static int _ifelse_else_label;
+    static int _ifelse_end_label;
+public:
+    If(treenode *cond, treenode *thenDo, treenode *elseDo = NULL) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
+                                                                    _else_do(obj_tree(elseDo)) {}
+
+    ~If() override {
+        delete _else_do;
+    }
+
+    void gencode(string c_type) override {
+
+        if (!_else_do) {// simple if case.
+            if (son1 && son2) {
+                son1->gencode("coder");
+                const string &ifend_label("if_end" + to_string(_if_end_label++));
+                cout << "fjp " + ifend_label << endl;
+                son2->gencode("coder");
+                cout << ifend_label + ":" << endl;
+            } else {
+                throw "something wrong with AST node to TreeNode conversion.\n";
+            }
+        } else {// if else case.
+            son1->gencode("coder");
+            const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label++));
+            const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label++));
+            cout << "fjp " + ifelse_else_label << endl;
+            son2->gencode("coder");
+            cout << "ujp " + ifelse_end_label << endl;
+            cout << ifelse_else_label + ":" << endl;
+            _else_do->gencode("coder");
+            cout << ifelse_end_label + ":" << endl;
+        }
+    }
+};
+
+int If::_if_end_label = 0;
+int If::_ifelse_else_label = 0;
+int If::_ifelse_end_label = 0;
+
+
 /* Notice that this class expects rhs expressions. */
 class BinOp : public TreeNode {
 protected:
@@ -223,6 +268,8 @@ public:
     double getValue() const { return value; }
 
     virtual void gencode(string c_type) {
+        cout << fixed;
+        cout.precision(2);
         cout << "ldc " << getValue() << endl;
     }
 };
@@ -365,15 +412,11 @@ TreeNode *obj_tree(treenode *root) {
                 case TN_IF:
                     if (ifn->else_n == NULL) {
                         /* if case (without else)*/
-                        obj_tree(ifn->cond);
-                        obj_tree(ifn->then_n);
+                        return new If(ifn->cond, ifn->then_n);
                     } else {
                         /* if - else case*/
-                        obj_tree(ifn->cond);
-                        obj_tree(ifn->then_n);
-                        obj_tree(ifn->else_n);
+                        return new If(ifn->cond, ifn->then_n, ifn->else_n);
                     }
-                    break;
 
                 case TN_COND_EXPR:
                     /* (cond)?(exp):(exp); */
