@@ -199,6 +199,36 @@ int If::_ifelse_else_label_idx = 0;
 int If::_ifelse_end_label_idx = 0;
 
 
+class Ternary : public TreeNode {
+    TreeNode *_else_ret;
+
+    static int _cond_else_idx;
+    static int _condLabel_end_idx;
+public:
+    Ternary(treenode *cond, treenode *then_ret, treenode *otherwise_ret) : TreeNode(obj_tree(cond), obj_tree(then_ret)),
+                                                                           _else_ret(obj_tree(otherwise_ret)) {}
+
+    ~Ternary() override {
+        delete _else_ret;
+    }
+
+    void gencode(string c_type) override {
+        son1->gencode("coder");     // cond check
+        const string &cond_else_label("cond_else" + to_string(_cond_else_idx++));
+        const string &cond_end_label("condLabel_end" + to_string(_condLabel_end_idx++));
+        cout << "fjp " + cond_else_label << endl;
+        son2->gencode("coder");     // then return expr
+        cout << "ujp " + cond_end_label << endl;
+        cout << cond_else_label + ":" << endl;  // otherwise return expr
+        _else_ret->gencode("coder");
+        cout << cond_end_label + ":" << endl;
+    }
+};
+
+int Ternary::_cond_else_idx = 0;
+int Ternary::_condLabel_end_idx = 0;
+
+
 /* Notice that this class expects rhs expressions. */
 class BinOp : public TreeNode {
 protected:
@@ -301,38 +331,33 @@ public:
     }
 };
 
-class Inc : public TreeNode {
+/* This is a++ */
+class Opxx : public TreeNode {
+    const string op;
 public:
-    virtual void gencode(string c_type) {
-        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
-        if (son1 != NULL && son2 == NULL) {
-            son1->gencode("coder"); // return value
-            cout << "inc 1" << endl;
-            cout << "sto" << endl;
-        }
-        if (son1 == NULL && son2 != NULL) {
-            son2->gencode("coder"); // return value
-            cout << "inc 1" << endl;
-            cout << "sto" << endl;
-        }
+    Opxx(const string &_op, treenode *lnode) : TreeNode(obj_tree(lnode), NULL), op(_op) {}
+
+    void gencode(string c_type) override {
+        son1->gencode("coder");     //this is the ret_val
+        son1->gencode("codel");     // get address
+        son1->gencode("coder");     // get value
+        cout << op + " 1" << endl;         // inc/dec by 1
+        cout << "sto" << endl;             // store back
     }
 };
 
-class Dec : public TreeNode {
+/* This is ++a */
+class xxOp : public TreeNode {
+    const string op;
 public:
-    virtual void gencode(string c_type) {
-        /*Im not sure how the tree looks.. Is the root (++), one son is an id and the oter is null?*/
-        if (son1 != NULL && son2 == NULL) {
-            son1->gencode("coder"); // return value
-            cout << "dec 1" << endl;
-            cout << "sto" << endl;
-        }
-        if (son1 == NULL && son2 != NULL) {
-            son2->gencode("coder"); // return value
-            cout << "dec 1" << endl;
-            cout << "sto" << endl;
-        }
+    xxOp(const string &op, treenode *rnode) : TreeNode(NULL, obj_tree(rnode)), op(op) {}
 
+    void gencode(string c_type) override {
+        son2->gencode("codel");
+        son2->gencode("coder");
+        cout << op + " 1" << endl;
+        cout << "sto" << endl;
+        son2->gencode("coder");
     }
 };
 
@@ -448,10 +473,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_COND_EXPR:
                     /* (cond)?(exp):(exp); */
-                    obj_tree(ifn->cond);
-                    obj_tree(ifn->then_n);
-                    obj_tree(ifn->else_n);
-                    break;
+                    return new Ternary(ifn->cond, ifn->then_n, ifn->else_n);
 
                 default:
                     /* Maybe you will use it later */
@@ -763,18 +785,21 @@ TreeNode *obj_tree(treenode *root) {
 
                         case INCR: {
                             /* Increment token "++" */
-                            TreeNode *inc_obj = new Inc();
-                            inc_obj->son1 = obj_tree(root->lnode);
-                            inc_obj->son2 = obj_tree(root->rnode);
-                            return inc_obj;
+                            if (root->lnode && !root->rnode) { // Axx case
+                                return new Opxx("inc", root->lnode);
+                            } else {
+                                if (!root->lnode && root->rnode) {
+                                    return new xxOp("inc", root->rnode);
+                                } else {
+                                    throw "something went wrong in INCR";
+                                }
+                            }
                         }
 
                         case DECR: {
                             /* Decrement token "--" */
-                            TreeNode *dec_obj = new Dec();
-                            dec_obj->son1 = obj_tree(root->lnode);
-                            dec_obj->son2 = obj_tree(root->rnode);
-                            return dec_obj;
+//                            return new xxOp("dec", root->lnode, root->rnode);
+                            break;
                         }
 
                         case PLUS: {
