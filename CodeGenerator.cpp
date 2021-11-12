@@ -132,6 +132,38 @@ public:
     }
 };
 
+class For : public TreeNode {
+    TreeNode *increment, *statement;
+    static int for_loop_idx;
+    static int for_end_idx;
+public:
+    For(treenode *init, treenode *cond, treenode *increment, treenode *statement) : TreeNode(obj_tree(init),
+                                                                                             obj_tree(cond)),
+                                                                                    increment(obj_tree(increment)),
+                                                                                    statement(obj_tree(statement)) {}
+
+    void gencode(string c_type) override {
+        const string &for_loop_label("for_loop" + to_string(for_loop_idx++));
+        const string &for_end_label("for_end" + to_string(for_end_idx++));
+        son1->gencode("");              //  init
+        cout << for_loop_label + ":" << endl;
+        son2->gencode("coder");         //  check condition
+        cout << "fjp " + for_end_label << endl;
+        statement->gencode("coder");    //  for body
+        increment->gencode("coder");    //  increment
+        cout << "ujp " + for_loop_label << endl;
+        cout << for_end_label + ":" << endl;
+    }
+
+    ~For() override {
+        delete increment;
+        delete statement;
+    }
+};
+
+int For::for_loop_idx = 0;
+int For::for_end_idx = 0;
+
 class While : public TreeNode {
     static int _while_loop_label_idx;
     static int _while_end_idx;
@@ -513,15 +545,12 @@ TreeNode *obj_tree(treenode *root) {
                     obj_tree(forn->stemnt);
                     break;
 
-                case TN_FOR:
+                case TN_FOR: {
                     /* For case*/
                     /* e.g. for(i=0;i<5;i++) { ... } */
                     /* Look at the output AST structure! */
-                    obj_tree(forn->init);
-                    obj_tree(forn->test);
-                    obj_tree(forn->stemnt);
-                    obj_tree(forn->incr);
-                    break;
+                    return new For(forn->init, forn->test, forn->incr, forn->stemnt);
+                }
 
                 default:
                     /* Maybe you will use it later */
@@ -912,7 +941,7 @@ TreeNode *obj_tree(treenode *root) {
 //                    obj_tree(root->rnode);
 //                    obj_tree(root->lnode);
 //                    break;
-                    return new DoWhile(root->lnode,root->rnode);
+                    return new DoWhile(root->lnode, root->rnode);
                 }
 
                 case TN_LABEL:
