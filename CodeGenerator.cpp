@@ -136,7 +136,7 @@ class While : public TreeNode {
     static int _while_loop_label_idx;
     static int _while_end_idx;
 public:
-    While(treenode *cond, treenode *dostuff) : TreeNode(obj_tree(cond), obj_tree(dostuff)) {}
+    While(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression), obj_tree(statement)) {}
 
     void gencode(string c_type) override {
         const string &while_loop_label("while_loop" + to_string(_while_loop_label_idx++));
@@ -153,6 +153,22 @@ public:
 int While::_while_loop_label_idx = 0;
 int While::_while_end_idx = 0;
 
+class DoWhile : public TreeNode {
+    static int _dowhile_loop_label_idx;
+public:
+    DoWhile(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression), obj_tree(statement)) {}
+
+    void gencode(string c_type) override {
+        const string &dowhile_label("do_while" + to_string(_dowhile_loop_label_idx++));
+        cout << dowhile_label + ":" << endl;
+        son2->gencode("coder");             //do stuff
+        son1->gencode("coder");             //check whether to continue
+        cout << "not" << endl;                     //if expression is true, then convert to false,and we can jump.
+        cout << "fjp " + dowhile_label << endl;    //else just go to next code section.
+    }
+};
+
+int DoWhile::_dowhile_loop_label_idx = 0;
 
 class If : public TreeNode {
     TreeNode *_else_do;
@@ -890,11 +906,14 @@ TreeNode *obj_tree(treenode *root) {
                     /* While case */
                     return new While(root->lnode, root->rnode);
 
-                case TN_DOWHILE:
+                case TN_DOWHILE: {
                     /* Do-While case */
-                    obj_tree(root->rnode);
-                    obj_tree(root->lnode);
-                    break;
+//                    this is i+=1
+//                    obj_tree(root->rnode);
+//                    obj_tree(root->lnode);
+//                    break;
+                    return new DoWhile(root->lnode,root->rnode);
+                }
 
                 case TN_LABEL:
                     obj_tree(root->lnode);
