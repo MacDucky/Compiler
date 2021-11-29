@@ -29,7 +29,6 @@ public:
     }
 
     friend class SymbolTable;
-
 };
 
 class SymbolTable {
@@ -51,14 +50,11 @@ public:
             return -1;
 
         while (start != nullptr) {
-
             if (start->identifier == id) {
                 return start->address;
             }
-
             start = start->next;
         }
-
         return -1; // not found
     }
 
@@ -122,6 +118,47 @@ public:
 /*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
 TreeNode *obj_tree(treenode *root);
 
+/*
+ * Self-explanatory...
+*/
+template<class T = std::string, int STACK_MAX = 1000>
+class CPtrStack {
+    const T *a[STACK_MAX]; // Maximum size of CPtrStack
+    ssize_t top;
+public:
+    CPtrStack() : top(-1) {}
+
+    /* Does NOT notify of stack overflow, default size should be sufficient.*/
+    void push(const T *x) {
+        if (top < (STACK_MAX - 1))
+            a[++top] = x;
+    }
+
+    const T *pop() {
+        if (top < 0) {
+            throw "CPtrStack popped when empty.";
+        } else {
+            const T *x = a[top--];
+            return x;
+        }
+    }
+};
+
+class Break : public TreeNode {
+    static CPtrStack<> refs;
+public:
+    void gencode(string c_type) override {
+        const string &last_label = *(refs.pop());
+        cout << "ujp " << last_label << std::endl;
+    }
+
+    static void AddLastLabel(const string *end_label) {
+        refs.push(end_label);
+    }
+};
+
+CPtrStack<> Break::refs;
+
 class Print : public TreeNode {
 public:
     explicit Print(treenode *rr_node) : TreeNode(nullptr, obj_tree(rr_node)) {}
@@ -140,11 +177,15 @@ public:
     For(treenode *init, treenode *cond, treenode *increment, treenode *statement) : TreeNode(obj_tree(init),
                                                                                              obj_tree(cond)),
                                                                                     increment(obj_tree(increment)),
-                                                                                    statement(obj_tree(statement)) {}
+                                                                                    statement(
+                                                                                            obj_tree(statement)) {}
 
     void gencode(string c_type) override {
         const string &for_loop_label("for_loop" + to_string(for_loop_idx++));
         const string &for_end_label("for_end" + to_string(for_end_idx++));
+
+        Break::AddLastLabel(&for_end_label);
+
         son1->gencode("");              //  init
         cout << for_loop_label + ":" << endl;
         son2->gencode("coder");         //  check condition
@@ -173,6 +214,9 @@ public:
     void gencode(string c_type) override {
         const string &while_loop_label("while_loop" + to_string(_while_loop_label_idx++));
         const string &while_end_label("while_end" + to_string(_while_end_idx++));
+
+        Break::AddLastLabel(&while_end_label);
+
         cout << while_loop_label + ":" << endl;
         son1->gencode("coder");
         cout << "fjp " + while_end_label << endl;
@@ -191,12 +235,17 @@ public:
     DoWhile(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression), obj_tree(statement)) {}
 
     void gencode(string c_type) override {
-        const string &dowhile_label("do_while" + to_string(_dowhile_loop_label_idx++));
+        const string &dowhile_label("do_while" + to_string(_dowhile_loop_label_idx));
+        const string dowhile_endlabel("do_while_end" + to_string(_dowhile_loop_label_idx++));
+
+        Break::AddLastLabel(&dowhile_endlabel);
+
         cout << dowhile_label + ":" << endl;
         son2->gencode("coder");             //do stuff
         son1->gencode("coder");             //check whether to continue
         cout << "not" << endl;                     //if expression is true, then convert to false,and we can jump.
         cout << "fjp " + dowhile_label << endl;    //else just go to next code section.
+        cout << dowhile_endlabel + ":" << endl;
     }
 };
 
@@ -210,7 +259,7 @@ class If : public TreeNode {
     static int _ifelse_end_label_idx;
 public:
     If(treenode *cond, treenode *thenDo, treenode *elseDo = nullptr) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
-                                                                    _else_do(obj_tree(elseDo)) {}
+                                                                       _else_do(obj_tree(elseDo)) {}
 
     ~If() override {
         delete _else_do;
@@ -253,7 +302,8 @@ class Ternary : public TreeNode {
     static int _cond_else_idx;
     static int _condLabel_end_idx;
 public:
-    Ternary(treenode *cond, treenode *then_ret, treenode *otherwise_ret) : TreeNode(obj_tree(cond), obj_tree(then_ret)),
+    Ternary(treenode *cond, treenode *then_ret, treenode *otherwise_ret) : TreeNode(obj_tree(cond),
+                                                                                    obj_tree(then_ret)),
                                                                            _else_ret(obj_tree(otherwise_ret)) {}
 
     ~Ternary() override {
@@ -754,8 +804,7 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->rnode);
                     } else if (root->hdr.tok == BREAK) {
                         /* break jump - for HW2! */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        return new Break();
                     } else if (root->hdr.tok == GOTO) {
                         /* GOTO jump - for HW2! */
                         obj_tree(root->lnode);
