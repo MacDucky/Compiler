@@ -17,7 +17,7 @@ class Variable {
 
 public:
     Variable() {
-        next = NULL;
+        next = nullptr;
     }
 
     Variable(string key, string type, int address, int size) {
@@ -25,7 +25,7 @@ public:
         this->size = size;
         this->type = type;
         this->address = address;
-        next = NULL;
+        next = nullptr;
     }
 
     friend class SymbolTable;
@@ -39,7 +39,7 @@ class SymbolTable {
 public:
     SymbolTable() {
         for (int i = 0; i < MAX; i++)
-            head[i] = NULL;
+            head[i] = nullptr;
     }
 
     // Function to find an identifier
@@ -47,10 +47,10 @@ public:
         int index = hashf(id);
         Variable *start = head[index];
 
-        if (start == NULL)
+        if (start == nullptr)
             return -1;
 
-        while (start != NULL) {
+        while (start != nullptr) {
 
             if (start->identifier == id) {
                 return start->address;
@@ -67,12 +67,12 @@ public:
         int index = hashf(id);
         Variable *p = new Variable(id, type, address, size);
 
-        if (head[index] == NULL) {
+        if (head[index] == nullptr) {
             head[index] = p;
             return true;
         } else {
             Variable *start = head[index];
-            while (start->next != NULL)
+            while (start->next != nullptr)
                 start = start->next;
             start->next = p;
             return true;
@@ -101,20 +101,20 @@ SymbolTable ST;
 class TreeNode { //base class
 public:
     /*you can add another son nodes */
-    TreeNode *son1 = NULL;
-    TreeNode *son2 = NULL;
+    TreeNode *son1 = nullptr;
+    TreeNode *son2 = nullptr;
 
     virtual ~TreeNode() {
         delete son1;
         delete son2;
     };
 
-    TreeNode(TreeNode *left = NULL, TreeNode *right = NULL) : son1(left), son2(right) {};
+    TreeNode(TreeNode *left = nullptr, TreeNode *right = nullptr) : son1(left), son2(right) {};
 
     /*recursive function to make Pcode*/
     virtual void gencode(string c_type = "") {
-        if (son1 != NULL) son1->gencode(c_type);
-        if (son2 != NULL) son2->gencode(c_type);
+        if (son1 != nullptr) son1->gencode(c_type);
+        if (son2 != nullptr) son2->gencode(c_type);
     };
 
 };
@@ -124,7 +124,7 @@ TreeNode *obj_tree(treenode *root);
 
 class Print : public TreeNode {
 public:
-    explicit Print(treenode *rr_node) : TreeNode(NULL, obj_tree(rr_node)) {}
+    explicit Print(treenode *rr_node) : TreeNode(nullptr, obj_tree(rr_node)) {}
 
     void gencode(string c_type) override {
         if (son2) son2->gencode("coder");
@@ -209,7 +209,7 @@ class If : public TreeNode {
     static int _ifelse_else_label_idx;
     static int _ifelse_end_label_idx;
 public:
-    If(treenode *cond, treenode *thenDo, treenode *elseDo = NULL) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
+    If(treenode *cond, treenode *thenDo, treenode *elseDo = nullptr) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
                                                                     _else_do(obj_tree(elseDo)) {}
 
     ~If() override {
@@ -293,8 +293,8 @@ public:
             son2->gencode("coder");
             cout << "neg" << endl;
         } else {
-            if (son1 != NULL) son1->gencode("coder");
-            if (son2 != NULL) son2->gencode("coder");
+            if (son1 != nullptr) son1->gencode("coder");
+            if (son2 != nullptr) son2->gencode("coder");
             cout << _op << endl;
         }
     }
@@ -305,7 +305,7 @@ public:
     explicit AssignBinOp(const string &op, treenode *lnode, treenode *rnode) : BinOp(op, lnode, rnode) {}
 
     void gencode(string c_type) override {
-        if (son1 != NULL) son1->gencode("codel");
+        if (son1 != nullptr) son1->gencode("codel");
         BinOp::gencode("");
         cout << "sto" << endl;
     }
@@ -317,8 +317,8 @@ public:
 class Assign : public TreeNode {
 public:
     virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("codel"); //return address
-        if (son2 != NULL) son2->gencode("coder"); // return value
+        if (son1 != nullptr) son1->gencode("codel"); //return address
+        if (son2 != nullptr) son2->gencode("coder"); // return value
         cout << "sto " << endl;
     }
 };
@@ -386,10 +386,7 @@ public:
 class Opxx : public TreeNode {
     const string op;
 public:
-    Opxx(const string &_op, treenode *lnode) : TreeNode(NULL, NULL), op(_op) {
-        son1 = obj_tree(lnode);
-        son2 = nullptr;
-    }
+    Opxx(const string &_op, treenode *lnode) : TreeNode(obj_tree(lnode), nullptr), op(_op) {}
 
     void gencode(string c_type) override {
         son1->gencode("coder");     //this is the ret_val
@@ -404,11 +401,7 @@ public:
 class xxOp : public TreeNode {
     const string op;
 public:
-    xxOp(const string &op, treenode *rnode) : TreeNode(NULL, NULL), op(op) {
-        son1 = nullptr;
-        son2 = obj_tree(rnode);
-
-    }
+    xxOp(const string &op, treenode *rnode) : TreeNode(nullptr, obj_tree(rnode)), op(op) {}
 
     void gencode(string c_type) override {
         son2->gencode("codel");
@@ -455,7 +448,7 @@ TreeNode *obj_tree(treenode *root) {
     for_node *forn;
     leafnode *leaf;
     if (!root) {
-        return NULL;
+        return nullptr;
     }
 
     switch (root->hdr.which) {
@@ -521,7 +514,7 @@ TreeNode *obj_tree(treenode *root) {
             switch (ifn->hdr.type) {
 
                 case TN_IF:
-                    if (ifn->else_n == NULL) {
+                    if (ifn->else_n == nullptr) {
                         /* if case (without else)*/
                         return new If(ifn->cond, ifn->then_n);
                     } else {
@@ -679,7 +672,7 @@ TreeNode *obj_tree(treenode *root) {
                     if (root->lnode->hdr.type == TN_TYPE_LIST) { // var type
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
                     }
-                    return new TreeNode(NULL, obj_tree(root->rnode));
+                    return new TreeNode(nullptr, obj_tree(root->rnode));
                 }
 
                 case TN_DECL_LIST:
