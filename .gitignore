@@ -6,3 +6,4 @@ CMakeLists.txt
 .vscode
 tests/test
 /cmake-build-debug_mingw/
+/tests/make_my_output.bat

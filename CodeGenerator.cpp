@@ -122,11 +122,11 @@ TreeNode *obj_tree(treenode *root);
  * Self-explanatory...
 */
 template<class T = std::string, int STACK_MAX = 1000>
-class CPtrStack {
-    const T *a[STACK_MAX]; // Maximum size of CPtrStack
+class ConstPtrStack {
+    const T *a[STACK_MAX]; // Maximum size of ConstPtrStack
     ssize_t top;
 public:
-    CPtrStack() : top(-1) {}
+    ConstPtrStack() : top(-1) {}
 
     /* Does NOT notify of stack overflow, default size should be sufficient.*/
     void push(const T *x) {
@@ -136,7 +136,7 @@ public:
 
     const T *pop() {
         if (top < 0) {
-            throw "CPtrStack popped when empty.";
+            throw "ConstPtrStack popped when empty.";
         } else {
             const T *x = a[top--];
             return x;
@@ -144,8 +144,8 @@ public:
     }
 };
 
-class Break : public TreeNode {
-    static CPtrStack<> refs;
+class LoopBreak : public TreeNode {
+    static ConstPtrStack<> refs;
 public:
     void gencode(string c_type) override {
         const string &last_label = *(refs.pop());
@@ -157,7 +157,7 @@ public:
     }
 };
 
-CPtrStack<> Break::refs;
+ConstPtrStack<> LoopBreak::refs;
 
 class Print : public TreeNode {
 public:
@@ -184,7 +184,7 @@ public:
         const string &for_loop_label("for_loop" + to_string(for_loop_idx++));
         const string &for_end_label("for_end" + to_string(for_end_idx++));
 
-        Break::AddLastLabel(&for_end_label);
+        LoopBreak::AddLastLabel(&for_end_label);
 
         son1->gencode("");              //  init
         cout << for_loop_label + ":" << endl;
@@ -215,7 +215,7 @@ public:
         const string &while_loop_label("while_loop" + to_string(_while_loop_label_idx++));
         const string &while_end_label("while_end" + to_string(_while_end_idx++));
 
-        Break::AddLastLabel(&while_end_label);
+        LoopBreak::AddLastLabel(&while_end_label);
 
         cout << while_loop_label + ":" << endl;
         son1->gencode("coder");
@@ -238,7 +238,7 @@ public:
         const string &dowhile_label("do_while" + to_string(_dowhile_loop_label_idx));
         const string dowhile_endlabel("do_while_end" + to_string(_dowhile_loop_label_idx++));
 
-        Break::AddLastLabel(&dowhile_endlabel);
+        LoopBreak::AddLastLabel(&dowhile_endlabel);
 
         cout << dowhile_label + ":" << endl;
         son2->gencode("coder");             //do stuff
@@ -804,7 +804,7 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->rnode);
                     } else if (root->hdr.tok == BREAK) {
                         /* break jump - for HW2! */
-                        return new Break();
+                        return new LoopBreak();
                     } else if (root->hdr.tok == GOTO) {
                         /* GOTO jump - for HW2! */
                         obj_tree(root->lnode);
