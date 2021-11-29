@@ -1,7 +1,7 @@
 ldc 5
 ldc 1
 sto
-while_loop0:	/* "whi:"  is not good! label must be at least 4 letters*/
+while_loop0:
 ldc 5
 ind
 ldc 10

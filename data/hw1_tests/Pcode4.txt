@@ -2,7 +2,7 @@ ldc 5
 ldc 10
 sto
 ldc 0
-fjp ifelse_else0    
+fjp ifelse_else0
 ldc 5
 ldc 5
 ind
@@ -10,7 +10,7 @@ ldc 6
 add
 sto
 ujp ifelse_end0
-ifelse_else0:          /* "ife:"  is not good! label must be at least 4 letters*/
+ifelse_else0:
 ldc 5
 ldc 10
 ldc 5

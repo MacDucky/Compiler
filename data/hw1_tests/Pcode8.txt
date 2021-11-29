@@ -2,12 +2,12 @@ ldc 5
 ldc 10.00
 sto
 ldc 6
-ldc 5.00		/* ldc 5.00000 is also okay */
+ldc 5.00
 sto
 ldc 7
 ldc 3.00
 sto
-while_loop0:	/* "whi:"  is not good! label must be at least 4 letters*/
+while_loop0:
 ldc 5
 ind
 ldc 0

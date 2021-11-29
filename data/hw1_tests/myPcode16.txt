@@ -1,0 +1,23 @@
+ldc 5
+ldc 10
+sto
+ldc 0
+fjp cond_else0
+ldc 5
+ldc 5
+ind
+ldc 6
+add
+sto
+ujp condLabel_end0
+cond_else0:
+ldc 5
+ldc 10
+ldc 5
+ind
+mul
+sto
+condLabel_end0:
+ldc 5
+ind
+print

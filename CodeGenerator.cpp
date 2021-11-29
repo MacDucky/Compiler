@@ -282,8 +282,11 @@ class BinOp : public TreeNode {
 protected:
     string _op;
 public:
-    explicit BinOp(const string &pcode_op, treenode *left, treenode *right) : TreeNode(obj_tree(left), obj_tree(right)),
-                                                                              _op(pcode_op) {}
+    explicit BinOp(const string &pcode_op, treenode *left, treenode *right) : TreeNode(nullptr, nullptr),
+                                                                              _op(pcode_op) {
+        son1 = obj_tree(left);
+        son2 = obj_tree(right);
+    }
 
     void gencode(string c_type) override {
         if (!son1 && son2) { //only case is when its ' -x '
@@ -383,7 +386,10 @@ public:
 class Opxx : public TreeNode {
     const string op;
 public:
-    Opxx(const string &_op, treenode *lnode) : TreeNode(obj_tree(lnode), NULL), op(_op) {}
+    Opxx(const string &_op, treenode *lnode) : TreeNode(NULL, NULL), op(_op) {
+        son1 = obj_tree(lnode);
+        son2 = nullptr;
+    }
 
     void gencode(string c_type) override {
         son1->gencode("coder");     //this is the ret_val
@@ -398,7 +404,11 @@ public:
 class xxOp : public TreeNode {
     const string op;
 public:
-    xxOp(const string &op, treenode *rnode) : TreeNode(NULL, obj_tree(rnode)), op(op) {}
+    xxOp(const string &op, treenode *rnode) : TreeNode(NULL, NULL), op(op) {
+        son1 = nullptr;
+        son2 = obj_tree(rnode);
+
+    }
 
     void gencode(string c_type) override {
         son2->gencode("codel");
@@ -690,9 +700,10 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_STEMNT: {
                     /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    TreeNode *t = new TreeNode();
+                    if (root->lnode) t->son1 = obj_tree(root->lnode);
+                    if (root->rnode) t->son2 = obj_tree(root->rnode);
+                    return t;
                 }
 
                 case TN_BIT_FIELD:
@@ -843,8 +854,15 @@ TreeNode *obj_tree(treenode *root) {
 
                         case DECR: {
                             /* Decrement token "--" */
-//                            return new xxOp("dec", root->lnode, root->rnode);
-                            break;
+                            if (root->lnode && !root->rnode) { // Axx case
+                                return new Opxx("dec", root->lnode);
+                            } else {
+                                if (!root->lnode && root->rnode) {
+                                    return new xxOp("dec", root->rnode);
+                                } else {
+                                    throw "something went wrong in DECR";
+                                }
+                            }
                         }
 
                         case PLUS: {

@@ -1,0 +1,19 @@
+ldc 5
+ldc 1
+sto
+do_while0:
+ldc 5
+ind
+print
+ldc 5
+ldc 5
+ind
+ldc 1
+add
+sto
+ldc 5
+ind
+ldc 10
+les
+not
+fjp do_while0

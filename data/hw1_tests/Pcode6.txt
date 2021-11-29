@@ -1,7 +1,7 @@
 ldc 5
-ldc 5.50   	/* ldc 5.50000 is also okay */
+ldc 5.50
 sto
-ldc 5.18		/* ldc 5.18000 is also okay */
+ldc 5.18
 not
 print
 ldc 5

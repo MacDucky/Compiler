@@ -40,6 +40,18 @@ bool StrStartsWith(const string &to_search, const string &to_look_for) {
     return to_search.rfind(to_look_for, 0) == 0;
 }
 
+std::string trim(const std::string &str,
+                 const std::string &whitespace = "\n\r\t\f\v") {
+    const auto strBegin = str.find_first_not_of(whitespace);
+    if (strBegin == std::string::npos)
+        return ""; // no content
+
+    const auto strEnd = str.find_last_not_of(whitespace);
+    const auto strRange = strEnd - strBegin + 1;
+
+    return str.substr(strBegin, strRange);
+}
+
 /*
  * e.g. Pcode1200.txt --> 1200
  * else -1
@@ -152,7 +164,7 @@ int main(int argc, char *argv[]) {
             int line = 1;
             std::string line1, line2;
             while (std::getline(pcode_stream, line1) && std::getline(mypcode_stream, line2)) {
-                if (line1 != line2) {
+                if (trim(line1) != trim(line2)) {
                     /*
                      * linux compilers are sensitive snowflakes
                      * if you are on windows remove following lines
