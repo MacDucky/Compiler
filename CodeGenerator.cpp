@@ -397,20 +397,9 @@ public:
 
 class Id : public TreeNode {
     string id_name;
-    static bool is_func_label;  // true when it's a func
 public:
 
-    Id(const string &id_n) : id_name(id_n) {
-        /*id_name = id_n;
-        if (ST.find(id_n) == -1) {
-            // todo: temporary fix for label, is it even needed?
-            if (!is_func_label) {
-                // you need to add the type and size according to declaration of identifier in AST
-                ST.insert(id_name, "int", Stack_Address++, 1);
-            } else
-                is_func_label = false;
-        }*/
-    }
+    Id(const string &id_n) : id_name(id_n) {}
 
     virtual void gencode(string c_type) {
         if (c_type == "codel") {
@@ -420,13 +409,7 @@ public:
             cout << "ind" << endl;
         }
     }
-
-    static void setIsFuncLabel() {
-        is_func_label = true;
-    }
 };
-
-bool Id::is_func_label = false;
 
 class Num : public TreeNode {
     int value;
@@ -666,7 +649,6 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_FUNC_DECL: {
                     /* Maybe you will use it later */
-                    Id::setIsFuncLabel();   // temporary patch to **NOT** add func labels.
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
@@ -758,29 +740,33 @@ TreeNode *obj_tree(treenode *root) {
                     // Dany: for future use.
                     string var_type, var_name;
                     int num_of_stars = 0;
-                    if (root->lnode->hdr.type == TN_TYPE_LIST) { // var type
+
+                    // var type
+                    if (root->lnode->hdr.type == TN_TYPE_LIST) {
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
-
-                        if (root->rnode->hdr.type == TN_DECL) { // this is a pointer declaration.
-
-                            auto count_stars = [](treenode *root,
-                                                  auto recur_count_stars) { // e.g. int ****b will yield 4.
-                                if (!root->rnode)
-                                    return 1;
-                                return recur_count_stars(root->rnode, recur_count_stars) + 1;
-                            };
-
-                            num_of_stars = count_stars(root->rnode->lnode, count_stars);
-                            var_name = ((leafnode *) root->rnode->rnode)->data.sval->str;
-                            ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address++,
-                                      ST.CalcSize(var_type));
-                        }
-                        // assuming we get here only on variable declarations.
-
-                        // adding to symbol table.
-//                        ST.insert()
-
                     }
+
+                    if (root->rnode->hdr.type == TN_DECL) { // this is a pointer declaration.
+
+                        auto count_stars = [](treenode *root,
+                                              auto recur_count_stars) { // e.g. int ****b will yield 4.
+                            if (!root->rnode)
+                                return 1;
+                            return recur_count_stars(root->rnode, recur_count_stars) + 1;
+                        };
+                        var_name = ((leafnode *) root->rnode->rnode)->data.sval->str;
+                        num_of_stars = count_stars(root->rnode->lnode, count_stars);
+                    } else { // the node to the right contains the name
+                        var_name = ((leafnode *) root->rnode)->data.sval->str;
+                    }
+
+                    // Now we got all info...
+                    if (!var_name.empty() and !var_type.empty()) {
+                        // adding to symbol table.
+                        ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address++,
+                                  ST.CalcSize(var_type));
+                    }
+
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
