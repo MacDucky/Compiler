@@ -31,10 +31,18 @@ public:
     friend class SymbolTable;
 };
 
+struct basic_types {
+    const string i;
+    const string f;
+    const string d;
+
+    basic_types() : i("int"), f("float"), d("double") {}
+};
+
 class SymbolTable {
     /* Think! what can you add to  symbol_table */
     Variable *head[MAX];
-
+    basic_types basic;
 public:
     SymbolTable() {
         for (int i = 0; i < MAX; i++)
@@ -89,6 +97,20 @@ public:
 
     void print() const {
         cout << "print() placeholder" << endl;
+    }
+
+    static string CalcType(string type, int num_of_stars) {
+        for (int i = 0; i < num_of_stars; ++i) {
+            type += "*";
+        }
+        return type;
+    }
+
+    int CalcSize(const string &type) {
+        if (type == basic.i || type == basic.f || type == basic.d)
+            return 1;
+        // Calc struct size here !!!!
+        return 0;
     }
 };
 
@@ -378,8 +400,8 @@ class Id : public TreeNode {
     static bool is_func_label;  // true when it's a func
 public:
 
-    Id(string id_n) {
-        id_name = id_n;
+    Id(const string &id_n) : id_name(id_n) {
+        /*id_name = id_n;
         if (ST.find(id_n) == -1) {
             // todo: temporary fix for label, is it even needed?
             if (!is_func_label) {
@@ -387,7 +409,7 @@ public:
                 ST.insert(id_name, "int", Stack_Address++, 1);
             } else
                 is_func_label = false;
-        }
+        }*/
     }
 
     virtual void gencode(string c_type) {
@@ -521,21 +543,28 @@ TreeNode *obj_tree(treenode *root) {
                 }
 
 
-                case TN_COMMENT:
-                    /* Maybe you will use it later */
-                    break;
+                case TN_COMMENT: {
+                    /* This prints out comments in the c code, can be used to differentiate pieces of pcode output. */
+                    string comment = leaf->data.str;
+                    cout << comment << endl;
+                    return nullptr;
+                }
 
                 case TN_ELLIPSIS:
                     /* Maybe you will use it later */
                     break;
 
-                case TN_STRING:
+                case TN_STRING: {
                     /* Maybe you will use it later */
                     break;
+                }
 
-                case TN_TYPE:
-                    /* Maybe you will use it later */
+                case TN_TYPE: {
+                    /* This is function return type / variable declaration type */
+                    string type = toksym(leaf->hdr.tok, 0);
+                    return nullptr;
                     break;
+                }
 
                 case TN_INT:
                     /* Constant case */
@@ -616,17 +645,19 @@ TreeNode *obj_tree(treenode *root) {
 
         case NODE_T:
             switch (root->hdr.type) {
-                case TN_PARBLOCK:
+                case TN_PARBLOCK: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_PARBLOCK_EMPTY:
+                case TN_PARBLOCK_EMPTY: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
                 case TN_TRANS_LIST: {
                     /* Maybe you will use it later */
@@ -661,81 +692,111 @@ TreeNode *obj_tree(treenode *root) {
                     return t;
                 }
 
-                case TN_ARRAY_DECL:
+                case TN_ARRAY_DECL: {
                     /* array declaration - for HW2 */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
-
-                case TN_EXPR_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_NAME_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_ENUM_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_FIELD_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_PARAM_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_IDENT_LIST:
-                    /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-
-                case TN_TYPE_LIST: {
-                    TreeNode *t = new TreeNode();
-                    t->son1 = obj_tree(root->lnode);
-                    t->son2 = obj_tree(root->rnode);
-                    return t;
                 }
 
-                case TN_COMP_DECL:
+                case TN_EXPR_LIST: {
+                    /* Maybe you will use it later */
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    break;
+                }
+
+                case TN_NAME_LIST: {
+                    /* Maybe you will use it later */
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    break;
+                }
+
+                case TN_ENUM_LIST: {
+                    /* Maybe you will use it later */
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    break;
+                }
+
+                case TN_FIELD_LIST: {
+                    /* Maybe you will use it later */
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    break;
+                }
+
+                case TN_PARAM_LIST: {
+                    /* Maybe you will use it later */
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    break;
+                }
+
+                case TN_IDENT_LIST: {
+                    /* Maybe you will use it later */
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    break;
+                }
+
+                case TN_TYPE_LIST: {
+                    obj_tree(root->lnode);
+                    obj_tree(root->rnode);
+                    return nullptr;
+                }
+
+                case TN_COMP_DECL: {
                     /* struct component declaration - for HW2 */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
                 case TN_DECL: {   /* structs declaration - for HW2 */
                     // Dany: for future use.
-                    string var_type;
+                    string var_type, var_name;
+                    int num_of_stars = 0;
                     if (root->lnode->hdr.type == TN_TYPE_LIST) { // var type
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
+
+                        if (root->rnode->hdr.type == TN_DECL) { // this is a pointer declaration.
+
+                            auto count_stars = [](treenode *root,
+                                                  auto recur_count_stars) { // e.g. int ****b will yield 4.
+                                if (!root->rnode)
+                                    return 1;
+                                return recur_count_stars(root->rnode, recur_count_stars) + 1;
+                            };
+
+                            num_of_stars = count_stars(root->rnode->lnode, count_stars);
+                            var_name = ((leafnode *) root->rnode->rnode)->data.sval->str;
+                            ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address++,
+                                      ST.CalcSize(var_type));
+                        }
+                        // assuming we get here only on variable declarations.
+
+                        // adding to symbol table.
+//                        ST.insert()
+
                     }
-                    return new TreeNode(nullptr, obj_tree(root->rnode));
+                    return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
-                case TN_DECL_LIST:
+                case TN_DECL_LIST: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_DECLS:
+                case TN_DECLS: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
                 case TN_STEMNT_LIST: {/* Maybe you will use it later */
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
@@ -749,55 +810,62 @@ TreeNode *obj_tree(treenode *root) {
                     return t;
                 }
 
-                case TN_BIT_FIELD:
+                case TN_BIT_FIELD: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_PNTR:
+                case TN_PNTR: {
                     /* pointer - for HW2! */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    /* dany: make Pointer class and add it's gencode.*/
+                    return nullptr;
+                }
 
-                case TN_TYPE_NME:
+                case TN_TYPE_NME: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_INIT_LIST:
+                case TN_INIT_LIST: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_INIT_BLK:
+                case TN_INIT_BLK: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_OBJ_DEF:
+                case TN_OBJ_DEF: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_OBJ_REF:
+                case TN_OBJ_REF: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_CAST:
+                case TN_CAST: {
                     /* Maybe you will use it later */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_JUMP:
+                case TN_JUMP: {
                     if (root->hdr.tok == RETURN) {
                         /* return jump - for HW2! */
                         obj_tree(root->lnode);
@@ -811,26 +879,30 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->rnode);
                     }
                     break;
+                }
 
-                case TN_SWITCH:
+                case TN_SWITCH: {
                     /* Switch case - for HW2! */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_INDEX:
+                case TN_INDEX: {
                     /* call for array - for HW2! */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_DEREF:
+                case TN_DEREF: {
                     /* pointer derefrence - for HW2! */
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                case TN_SELECT:
+                case TN_SELECT: {
                     /* struct case - for HW2! */
                     if (root->hdr.tok == ARROW) {
                         /* Struct select case "->" */
@@ -844,8 +916,9 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->rnode);
                     }
                     break;
+                }
 
-                case TN_ASSIGN:
+                case TN_ASSIGN: {
                     if (root->hdr.tok == EQ) {
                         /* Regular assignment "=" */
                         /* e.g. x = 5; */
@@ -872,14 +945,16 @@ TreeNode *obj_tree(treenode *root) {
                         return new AssignBinOp("div", root->lnode, root->rnode);
                     }
                     break;
+                }
 
                 case TN_EXPR:
                     switch (root->hdr.tok) {
-                        case CASE:
+                        case CASE: {
                             /* you should not get here */
                             obj_tree(root->lnode);
                             obj_tree(root->rnode);
                             break;
+                        }
 
                         case INCR: {
                             /* Increment token "++" */
@@ -984,10 +1059,11 @@ TreeNode *obj_tree(treenode *root) {
                             return bin_obj;
                         }
 
-                        default:
+                        default: {
                             obj_tree(root->lnode);
                             obj_tree(root->rnode);
                             break;
+                        }
                     }
                     break;
 
@@ -1004,20 +1080,23 @@ TreeNode *obj_tree(treenode *root) {
                     return new DoWhile(root->lnode, root->rnode);
                 }
 
-                case TN_LABEL:
+                case TN_LABEL: {
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
+                }
 
-                default:
+                default: {
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
+                }
             }
             break;
 
-        case NONE_T:
+        case NONE_T: {
             printf("Error: Unknown node type!\n");
             exit(FAILURE);
+        }
     }
 
 
