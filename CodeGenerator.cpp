@@ -395,19 +395,44 @@ public:
     }
 };
 
+
 class Id : public TreeNode {
     string id_name;
-public:
 
-    Id(const string &id_n) : id_name(id_n) {}
+    static void print_derefs() {
+        for (int i = 0; i < num_of_derefs; ++i) {
+            cout << "ind" << endl;
+        }
+        num_of_derefs = 0;
+    }
+
+public:
+    static int num_of_derefs;
+
+    explicit Id(const string &id_n) : id_name(id_n) {}
 
     virtual void gencode(string c_type) {
         if (c_type == "codel") {
             cout << "ldc " << ST.find(id_name) << endl;
+            print_derefs();
         } else if (c_type == "coder") {
             cout << "ldc " << ST.find(id_name) << endl;
             cout << "ind" << endl;
+            print_derefs();
         }
+    }
+
+};
+
+int Id::num_of_derefs = 0;
+
+class PtrDeref : public TreeNode {
+public:
+    explicit PtrDeref(treenode *rnode) : TreeNode(nullptr, obj_tree(rnode)) {}
+
+    void gencode(string c_type) override {
+        Id::num_of_derefs++;
+        son2->gencode(c_type);
     }
 };
 
@@ -649,6 +674,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_FUNC_DECL: {
                     /* Maybe you will use it later */
+                    return nullptr;
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
@@ -748,8 +774,7 @@ TreeNode *obj_tree(treenode *root) {
 
                     if (root->rnode->hdr.type == TN_DECL) { // this is a pointer declaration.
 
-                        auto count_stars = [](treenode *root,
-                                              auto recur_count_stars) { // e.g. int ****b will yield 4.
+                        auto count_stars = [](treenode *root, auto recur_count_stars) { // e.g. int ****b will yield 4.
                             if (!root->rnode)
                                 return 1;
                             return recur_count_stars(root->rnode, recur_count_stars) + 1;
@@ -760,7 +785,7 @@ TreeNode *obj_tree(treenode *root) {
                         var_name = ((leafnode *) root->rnode)->data.sval->str;
                     }
 
-                    // Now we got all info...
+                    // Now we got all var info...
                     if (!var_name.empty() and !var_type.empty()) {
                         // adding to symbol table.
                         ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address++,
@@ -883,9 +908,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_DEREF: {
                     /* pointer derefrence - for HW2! */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    return new PtrDeref(root->rnode);
                 }
 
                 case TN_SELECT: {
