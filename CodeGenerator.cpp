@@ -144,42 +144,48 @@ TreeNode *obj_tree(treenode *root);
  * Self-explanatory...
 */
 template<class T = std::string, int STACK_MAX = 1000>
-class ConstPtrStack {
-    const T *a[STACK_MAX]; // Maximum size of ConstPtrStack
+class MyStack {
+    T a[STACK_MAX]; // Maximum size of MyStack
     ssize_t top;
 public:
-    ConstPtrStack() : top(-1) {}
+    MyStack() : top(-1) {}
 
     /* Does NOT notify of stack overflow, default size should be sufficient.*/
-    void push(const T *x) {
+    void push(const T &x) {
         if (top < (STACK_MAX - 1))
-            a[++top] = x;
+            a[++top] = T(x);
     }
 
-    const T *pop() {
+    const T &pop() {
         if (top < 0) {
-            throw "ConstPtrStack popped when empty.";
+            cout << "Stack popped incorrectly!" << endl;
+            exit(-1);
         } else {
-            const T *x = a[top--];
+            const T &x = a[top--];
             return x;
         }
     }
+
+    const T &peek() { return a[top]; }
 };
 
+
 class LoopBreak : public TreeNode {
-    static ConstPtrStack<> refs;
+    static MyStack<> refs;
 public:
     void gencode(string c_type) override {
-        const string &last_label = *(refs.pop());
+        const string &last_label = refs.peek();
         cout << "ujp " << last_label << std::endl;
     }
 
-    static void AddLastLabel(const string *end_label) {
+    static void AddLastLabel(const string &end_label) {
         refs.push(end_label);
     }
+
+    static void RemoveLastLabel() { refs.pop(); }
 };
 
-ConstPtrStack<> LoopBreak::refs;
+MyStack<> LoopBreak::refs;
 
 class Print : public TreeNode {
 public:
@@ -200,19 +206,23 @@ public:
                                                                                              obj_tree(cond)),
                                                                                     increment(obj_tree(increment)),
                                                                                     statement(
-                                                                                            obj_tree(statement)) {}
+                                                                                            obj_tree(
+                                                                                                    statement)) {}
 
     void gencode(string c_type) override {
         const string &for_loop_label("for_loop" + to_string(for_loop_idx++));
         const string &for_end_label("for_end" + to_string(for_end_idx++));
 
-        LoopBreak::AddLastLabel(&for_end_label);
+        LoopBreak::AddLastLabel(for_end_label);
 
         son1->gencode("");              //  init
         cout << for_loop_label + ":" << endl;
         son2->gencode("coder");         //  check condition
         cout << "fjp " + for_end_label << endl;
         statement->gencode("coder");    //  for body
+
+        LoopBreak::RemoveLastLabel();             //if a break was in the loop, it would occur by now.
+
         increment->gencode("coder");    //  increment
         cout << "ujp " + for_loop_label << endl;
         cout << for_end_label + ":" << endl;
@@ -231,18 +241,22 @@ class While : public TreeNode {
     static int _while_loop_label_idx;
     static int _while_end_idx;
 public:
-    While(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression), obj_tree(statement)) {}
+    While(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression),
+                                                                obj_tree(statement)) {}
 
     void gencode(string c_type) override {
         const string &while_loop_label("while_loop" + to_string(_while_loop_label_idx++));
         const string &while_end_label("while_end" + to_string(_while_end_idx++));
 
-        LoopBreak::AddLastLabel(&while_end_label);
+        LoopBreak::AddLastLabel(while_end_label);
 
         cout << while_loop_label + ":" << endl;
         son1->gencode("coder");
         cout << "fjp " + while_end_label << endl;
         son2->gencode("coder");
+
+        LoopBreak::RemoveLastLabel();             //if a break was in the loop, it would occur by now.
+
         cout << "ujp " + while_loop_label << endl;
         cout << while_end_label + ":" << endl;
     }
@@ -254,17 +268,21 @@ int While::_while_end_idx = 0;
 class DoWhile : public TreeNode {
     static int _dowhile_loop_label_idx;
 public:
-    DoWhile(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression), obj_tree(statement)) {}
+    DoWhile(treenode *expression, treenode *statement) : TreeNode(obj_tree(expression),
+                                                                  obj_tree(statement)) {}
 
     void gencode(string c_type) override {
         const string &dowhile_label("do_while" + to_string(_dowhile_loop_label_idx));
         const string dowhile_endlabel("do_while_end" + to_string(_dowhile_loop_label_idx++));
 
-        LoopBreak::AddLastLabel(&dowhile_endlabel);
+        LoopBreak::AddLastLabel(dowhile_endlabel);
 
         cout << dowhile_label + ":" << endl;
         son2->gencode("coder");             //do stuff
         son1->gencode("coder");             //check whether to continue
+
+        LoopBreak::RemoveLastLabel();             //if a break was in the loop, it would occur by now.
+
         cout << "not" << endl;                     //if expression is true, then convert to false,and we can jump.
         cout << "fjp " + dowhile_label << endl;    //else just go to next code section.
         cout << dowhile_endlabel + ":" << endl;
@@ -674,7 +692,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_FUNC_DECL: {
                     /* Maybe you will use it later */
-                    return nullptr;
+                    return nullptr; // this is where you get info about functions...not relevant currently.
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
@@ -772,7 +790,8 @@ TreeNode *obj_tree(treenode *root) {
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
                     }
 
-                    if (root->rnode->hdr.type == TN_DECL) { // this is a pointer declaration.
+                    tn_t rn_type = root->rnode->hdr.type;
+                    if (rn_type == TN_DECL) { // this is a pointer declaration.
 
                         auto count_stars = [](treenode *root, auto recur_count_stars) { // e.g. int ****b will yield 4.
                             if (!root->rnode)
@@ -781,8 +800,10 @@ TreeNode *obj_tree(treenode *root) {
                         };
                         var_name = ((leafnode *) root->rnode->rnode)->data.sval->str;
                         num_of_stars = count_stars(root->rnode->lnode, count_stars);
-                    } else { // the node to the right contains the name
+                    } else if (rn_type == TN_IDENT) { // the node to the right contains the name
                         var_name = ((leafnode *) root->rnode)->data.sval->str;
+                    } else if (rn_type == TN_ARRAY_DECL) { // this is an array declaration
+
                     }
 
                     // Now we got all var info...
@@ -830,7 +851,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_PNTR: {
                     /* pointer - for HW2! */
-                    /* dany: make Pointer class and add it's gencode.*/
+                    /* dany: nothing to be done here*/
                     return nullptr;
                 }
 
