@@ -27,7 +27,7 @@ public:
     MyArray(const MyArray<T> &to_copy) {
         if (this != &to_copy) {
             n = to_copy.n;
-            array = new int[n];
+            array = new T[n];
             for (int i = 0; i < n; i++)
                 array[i] = to_copy.array[i];
         }
@@ -107,20 +107,35 @@ public:
 };
 
 typedef MyStack<int, 100> Dims;
+typedef MyStack<treenode *, 100> ASTNodes;
 
-
-class OrderedDims : public MyArray<int> {
+template<class T>
+class OrderedArray : public MyArray<T> {
 public:
-    OrderedDims() = default;
+    OrderedArray() = default;
 
-    explicit OrderedDims(const Dims &dims) : MyArray<int>(dims.get_size()) {
-        Dims copy(dims);
+    explicit OrderedArray(const MyStack<T, 100> &stack) : MyArray<T>(stack.get_size()) {
+        MyStack<T, 100> copy(stack);
         int size = copy.get_size();
         for (int i = 0; i < size; ++i) {
-            int val = copy.pop();
+            const T &val = copy.pop();
             this->operator[](i) = val;
         }
     }
+};
+
+class OrderedDims : public OrderedArray<int> {
+public:
+    OrderedDims() = default;
+
+    explicit OrderedDims(const Dims &dims) : OrderedArray<int>(dims) {}
+};
+
+class OrderedNodes : public OrderedArray<treenode *> {
+public:
+    OrderedNodes() = default;
+
+    explicit OrderedNodes(const ASTNodes &astNodes) : OrderedArray<treenode *>(astNodes) {}
 };
 
 /**********************************************************************************************************************/
@@ -375,23 +390,25 @@ public:
     }
 };
 
-class ArrayIndexCollector : public Collector<Dims> {
-    Dims dims;
+class ArrayIndexCollector : public Collector<ASTNodes, string, treenode *> {
+    ASTNodes treenodes;
     string name;
 public:
-    explicit ArrayIndexCollector(treenode *index_node) : Collector<Dims>(index_node, dims, TN_INDEX, name) {
+    explicit ArrayIndexCollector(treenode *index_node) : Collector<ASTNodes, string, treenode *>(index_node, treenodes,
+                                                                                                 TN_INDEX,
+                                                                                                 name) {
         collect();
     }
 
-    int right_field_selector(treenode *to_collect_from) override {
-        return reinterpret_cast<leafnode *>(to_collect_from)->data.ival;
+    treenode *right_field_selector(treenode *to_collect_from) override {
+        return to_collect_from;
     }
 
     string left_field_selector(treenode *to_collect_from) override {
         return reinterpret_cast<leafnode *>(to_collect_from)->data.sval->str;
     }
 
-    OrderedDims get_ordered_indexes() const { return OrderedDims(dims); }
+    OrderedNodes get_ordered_nodes() const { return OrderedNodes(treenodes); }
 
     string get_var_name() const { return name; }
 };
@@ -643,7 +660,7 @@ public:
 
 class Id : public TreeNode {
     string id_name;
-    OrderedDims orderedIndexes;
+    OrderedNodes orderedNodes;
 
     static void print_derefs() {
         for (int i = 0; i < num_of_derefs; ++i) {
@@ -657,8 +674,8 @@ public:
 
     explicit Id(const string id_n) : id_name(id_n) {}
 
-    Id(const string id_n, const OrderedDims &ordered_indexes) : id_name(id_n),
-                                                                orderedIndexes(ordered_indexes) {}
+    Id(const string id_n, const OrderedNodes &ordered_nodes) : id_name(id_n),
+                                                               orderedNodes(ordered_nodes) {}
 
     virtual void gencode(string c_type) {
         const Variable *var = ST.find(id_name);
@@ -667,7 +684,7 @@ public:
             cout << "Variable was not declared!" << endl;
             exit(-1);
         }
-        if (orderedIndexes.is_initialized()) { // array
+        if (orderedNodes.is_initialized()) { // array
             gencode_for_arr(c_type, var);
             return;
         }
@@ -687,20 +704,20 @@ public:
         OrderedDims orderedDims(var->getOrderedDims());
         if (c_type == "codel") {
             cout << "ldc " << var->getAddress() << endl;
-            for (int i = 0; i < orderedIndexes.get_size() - 1; ++i) {
-                cout << "ldc " << orderedIndexes[i] << endl;
+            for (int i = 0; i < orderedNodes.get_size() - 1; ++i) {
+                code_recur(orderedNodes[i]);
                 cout << "ixa " << orderedDims[i + 1] << endl;
             }
-            cout << "ldc " << orderedIndexes[orderedIndexes.get_size() - 1] << endl;
+            code_recur(orderedNodes[orderedNodes.get_size() - 1]);
             cout << "ixa " << var_size << endl;
             print_derefs();
         } else if (c_type == "coder") {
             cout << "ldc " << var->getAddress() << endl;
-            for (int i = 0; i < orderedIndexes.get_size() - 1; ++i) {
-                cout << "ldc " << orderedIndexes[i] << endl;
+            for (int i = 0; i < orderedNodes.get_size() - 1; ++i) {
+                code_recur(orderedNodes[i]);
                 cout << "ixa " << orderedDims[i + 1] << endl;
             }
-            cout << "ldc " << orderedIndexes[orderedIndexes.get_size() - 1] << endl;
+            code_recur(orderedNodes[orderedNodes.get_size() - 1]);
             cout << "ixa " << var_size << endl;
             cout << "ind" << endl;
             print_derefs();
@@ -1193,9 +1210,9 @@ TreeNode *obj_tree(treenode *root) {
                     /* call for array - for HW2! */
                     // collect all indexes here.
                     ArrayIndexCollector ICollector(root);
-                    OrderedDims indexes = ICollector.get_ordered_indexes();
+                    OrderedNodes nodes = ICollector.get_ordered_nodes();
                     string var_name = ICollector.get_var_name();
-                    return new Id(var_name, indexes);
+                    return new Id(var_name, nodes);
                 }
 
                 case TN_DEREF: {
