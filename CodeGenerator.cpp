@@ -706,7 +706,7 @@ public:
             cout << "ldc " << var->getAddress() << endl;
             for (int i = 0; i < orderedNodes.get_size() - 1; ++i) {
                 code_recur(orderedNodes[i]);
-                cout << "ixa " << orderedDims[i + 1] << endl;
+                cout << "ixa " << orderedDims[i + 1] * var_size << endl;
             }
             code_recur(orderedNodes[orderedNodes.get_size() - 1]);
             cout << "ixa " << var_size << endl;
@@ -715,7 +715,7 @@ public:
             cout << "ldc " << var->getAddress() << endl;
             for (int i = 0; i < orderedNodes.get_size() - 1; ++i) {
                 code_recur(orderedNodes[i]);
-                cout << "ixa " << orderedDims[i + 1] << endl;
+                cout << "ixa " << orderedDims[i + 1] * var_size << endl;
             }
             code_recur(orderedNodes[orderedNodes.get_size() - 1]);
             cout << "ixa " << var_size << endl;
@@ -1244,7 +1244,6 @@ TreeNode *obj_tree(treenode *root) {
                         ass_obj->son1 = obj_tree(root->lnode);
                         ass_obj->son2 = obj_tree(root->rnode);
                         return ass_obj;
-
                     } else if (root->hdr.tok == PLUS_EQ) {
                         /* Plus equal assignment "+=" */
                         /* e.g. x += 5; */
