@@ -802,6 +802,9 @@ public:
         cout << "not" << endl;
     }
 };
+class Switch:public TreeNode{
+    
+};
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
