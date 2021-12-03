@@ -7,69 +7,199 @@ using namespace std;
 static int Stack_Address = 5;
 const int MAX = 100;
 
+/*****************************************************   Aux Classes   ************************************************/
+template<class T>
+class MyArray {
+    size_t n;
+    T *array;
+public:
+    MyArray() : array(nullptr), n(0) {}
+
+    MyArray(size_t size) : array(new T[size]), n(size) {}
+
+    template<int>
+    explicit MyArray(size_t size):array(new int[size]), n(size) {
+        for (int i = 0; i < n; ++i) {
+            array[i] = 0;
+        }
+    }
+
+    MyArray(const MyArray<T> &to_copy) {
+        if (this != &to_copy) {
+            n = to_copy.n;
+            array = new int[n];
+            for (int i = 0; i < n; i++)
+                array[i] = to_copy.array[i];
+        }
+    }
+
+    MyArray<T> &operator=(const MyArray<T> &rhs) {
+        if (this != &rhs) {
+            if (n > 0)
+                delete[] array;
+            n = rhs.n;
+            array = new T[n];
+            for (int i = 0; i < n; ++i) {
+                array[i] = rhs[i];
+            }
+        }
+        return *this;
+    }
+
+    ~MyArray() {
+        delete[] array;
+        array = nullptr;
+    }
+
+
+    T &operator[](size_t idx) {
+        if (n > 0 && idx < n) return array[idx];
+        cout << "MyArray out of bound access!" << endl;
+        exit(-1);
+    }
+
+    const T &operator[](size_t idx) const {
+        if (n > 0 && idx < n) return array[idx];
+        if (n <= 0) cout << "My array not initialized!" << endl;
+        else cout << "MyArray out of bound access" << endl;
+        exit(-1);
+    }
+
+    size_t get_size() const { return n; }
+
+    bool is_initialized() const { return n > 0; }
+};
+
+
+template<class T, int STACK_MAX = 1000>
+class MyStack {
+    T a[STACK_MAX]; // Maximum size of MyStack
+    ssize_t top;
+
+public:
+    MyStack() : top(-1) {}
+
+    /* Does NOT notify of stack overflow, default size should be sufficient.*/
+    void push(const T &x) {
+        if (top < (STACK_MAX - 1))
+            a[++top] = T(x);
+    }
+
+    const T &pop() {
+        if (top < 0) {
+            cout << "Stack popped incorrectly!" << endl;
+            exit(-1);
+        } else {
+            const T &x = a[top--];
+            return x;
+        }
+    }
+
+    const T &peek() { return a[top]; }
+
+    bool is_empty() const { return top == -1; }
+
+    size_t get_size() const { return top + 1; }
+
+    void collect(const T &x) {
+        push(x);
+    }
+};
+
+typedef MyStack<int, 100> Dims;
+
+
+class OrderedDims : public MyArray<int> {
+public:
+    OrderedDims() = default;
+
+    explicit OrderedDims(const Dims &dims) : MyArray<int>(dims.get_size()) {
+        Dims copy(dims);
+        int size = copy.get_size();
+        for (int i = 0; i < size; ++i) {
+            int val = copy.pop();
+            this->operator[](i) = val;
+        }
+    }
+};
+
+/**********************************************************************************************************************/
+
 
 class Variable {
 
     /* Think! what does a Variable contain? */
-    string identifier, type;
+    const string identifier, type;
     int address, size;
     Variable *next;
+    OrderedDims ordered_dims;
 
 public:
-    Variable() {
-        next = nullptr;
+//    Variable() : next(nullptr) {} // is this needed?
+
+    Variable(string key, string type, int address, int size, const Dims &dims = Dims()) : identifier(key), size(size),
+                                                                                          type(type), address(address),
+                                                                                          next(nullptr) {
+        if (!dims.is_empty()) {
+            ordered_dims = OrderedDims(dims);
+        }
     }
 
-    Variable(string key, string type, int address, int size) {
-        this->identifier = key;
-        this->size = size;
-        this->type = type;
-        this->address = address;
-        next = nullptr;
-    }
+    const string &getIdentifier() const { return identifier; }
+
+    const string &getType() const { return type; }
+
+    int getAddress() const { return address; }
+
+    int getSize() const { return size; }
+
+    const OrderedDims &getOrderedDims() const { return ordered_dims; }
 
     friend class SymbolTable;
-};
-
-struct basic_types {
-    const string i;
-    const string f;
-    const string d;
-
-    basic_types() : i("int"), f("float"), d("double") {}
 };
 
 class SymbolTable {
     /* Think! what can you add to  symbol_table */
     Variable *head[MAX];
-    basic_types basic;
+
+    struct {
+        const string i;
+        const string f;
+        const string d;
+        const string p;
+
+        bool isBasic(const string &type) { return type == i || type == f || type == d || type == p; }
+    } base_t;
+
+    friend class Array;
+
 public:
-    SymbolTable() {
+    SymbolTable() : base_t({"int", "float", "double", "pointer"}) {
         for (int i = 0; i < MAX; i++)
             head[i] = nullptr;
     }
 
-    // Function to find an identifier
-    int find(string id) {
+    // Function to find a variable, nullptr is returned if not found.
+    const Variable *find(const string &id) {
         int index = hashf(id);
         Variable *start = head[index];
 
         if (start == nullptr)
-            return -1;
+            return nullptr;
 
         while (start != nullptr) {
             if (start->identifier == id) {
-                return start->address;
+                return start;
             }
             start = start->next;
         }
-        return -1; // not found
+        return nullptr; // not found
     }
 
     // Function to insert an identifier
-    bool insert(string id, string type, int address, int size) {
+    bool insert(const string &id, const string &type, int address, int size, const Dims &dims = Dims()) {
         int index = hashf(id);
-        Variable *p = new Variable(id, type, address, size);
+        Variable *p = new Variable(id, type, address, size, dims);
 
         if (head[index] == nullptr) {
             head[index] = p;
@@ -95,7 +225,7 @@ public:
         return (asciiSum % MAX);
     }
 
-    void print() const {
+    static void print() {
         cout << "print() placeholder" << endl;
     }
 
@@ -106,11 +236,57 @@ public:
         return type;
     }
 
-    int CalcSize(const string &type) {
-        if (type == basic.i || type == basic.f || type == basic.d)
-            return 1;
-        // Calc struct size here !!!!
-        return 0;
+    int CalcSize(const string &type, const Dims &dims_of_array = Dims()) {
+        string t(type);
+        int type_size = 0;
+        Dims dims(dims_of_array);
+
+        // might make problems currently with int* arr[5]!
+        if (t.find('*') != string::npos) t = "pointer";
+        if (base_t.isBasic(t))  // int,float,double,pointer
+            type_size = 1;
+
+        //maybe insert dims into table,can't hurt right? meh...
+        while (!dims.is_empty()) {
+            type_size *= dims.pop();
+        }
+
+        if (type_size == 0) {
+            cout << "Size was not defined!" << endl;
+            exit(-1);
+        }
+        return type_size;
+    }
+
+    bool is_pointer(const string &id) {
+        const Variable *var = find(id);
+        if (!var) {
+            cout << "Var not in symbol table!" << endl;
+            exit(-1);
+        }
+        const string &var_type = var->getType();
+        if (var_type.find('*') != string::npos)
+            return true;
+        return false;
+    }
+
+    bool is_array(const string &id) {
+        const Variable *var = find(id);
+        if (!var) {
+            cout << "Var not in symbol table!" << endl;
+            exit(-1);
+        }
+        OrderedDims var_dims = var->getOrderedDims();
+        if (var_dims.get_size() > 0)
+            return true;
+        return false;
+    }
+
+    ~SymbolTable() {
+        for (auto var: head) {
+            if (var) delete var->next;
+            delete var;
+        }
     }
 };
 
@@ -141,51 +317,102 @@ public:
 TreeNode *obj_tree(treenode *root);
 
 /*
- * Self-explanatory...
+ * Generic class to have the option to collect according to tree structure.
+ * Inherit from this class to add functionality.
 */
-template<class T = std::string, int STACK_MAX = 1000>
-class MyStack {
-    T a[STACK_MAX]; // Maximum size of MyStack
-    ssize_t top;
+template<class CollectorObject, class LeftField = string, class CollectedType = int>
+class Collector {
+    const treenode *start;
+    CollectorObject &collector_o;     // container with collect method
+    LeftField &left_field;
+    tn_t follow_up_node;
 public:
-    MyStack() : top(-1) {}
+    Collector(const treenode *start, CollectorObject &collector, tn_t follow_up_node_type, LeftField &left_field)
+            : start(start),
+              collector_o(collector),
+              follow_up_node(
+                      follow_up_node_type),
+              left_field(left_field) {}
 
-    /* Does NOT notify of stack overflow, default size should be sufficient.*/
-    void push(const T &x) {
-        if (top < (STACK_MAX - 1))
-            a[++top] = T(x);
-    }
-
-    const T &pop() {
-        if (top < 0) {
-            cout << "Stack popped incorrectly!" << endl;
-            exit(-1);
-        } else {
-            const T &x = a[top--];
-            return x;
+    void collect() {
+        const treenode *curr = start;
+        CollectedType item_to_collect;
+        while (curr->lnode->hdr.type == follow_up_node) { // collect
+            item_to_collect = right_field_selector(curr->rnode);
+            collector_o.collect(item_to_collect);
+            curr = curr->lnode;
         }
+        collector_o.collect(right_field_selector(curr->rnode));
+        left_field = left_field_selector(curr->lnode);
     }
 
-    const T &peek() { return a[top]; }
+    virtual CollectedType right_field_selector(treenode *to_collect_from) = 0;
+
+    virtual LeftField left_field_selector(treenode *to_collect_from) = 0;
+};
+
+// This class adds labels to ST, it does NOT create pcode.
+class ArrayLabelAdder : public TreeNode, public Collector<Dims> {
+    Dims dims;
+    string type;
+    string name;
+
+public:
+    ArrayLabelAdder(treenode *arr_decl_node, const string &type) : Collector<Dims>(arr_decl_node, dims,
+                                                                                   TN_ARRAY_DECL, name), type(type) {
+        collect();  // collect dimensions + name.
+        int size = ST.CalcSize(type, dims);
+        ST.insert(name, ST.CalcType(type, dims.get_size()), Stack_Address, size, dims);
+        Stack_Address += size;
+    }
+
+    int right_field_selector(treenode *to_collect_from) override {
+        return reinterpret_cast<leafnode *>(to_collect_from)->data.ival;
+    }
+
+    string left_field_selector(treenode *to_collect_from) override {
+        return reinterpret_cast<leafnode *>(to_collect_from)->data.sval->str;
+    }
+};
+
+class ArrayIndexCollector : public Collector<Dims> {
+    Dims dims;
+    string name;
+public:
+    explicit ArrayIndexCollector(treenode *index_node) : Collector<Dims>(index_node, dims, TN_INDEX, name) {
+        collect();
+    }
+
+    int right_field_selector(treenode *to_collect_from) override {
+        return reinterpret_cast<leafnode *>(to_collect_from)->data.ival;
+    }
+
+    string left_field_selector(treenode *to_collect_from) override {
+        return reinterpret_cast<leafnode *>(to_collect_from)->data.sval->str;
+    }
+
+    OrderedDims get_ordered_indexes() const { return OrderedDims(dims); }
+
+    string get_var_name() const { return name; }
 };
 
 
 class LoopBreak : public TreeNode {
-    static MyStack<> refs;
+    static MyStack<string> label_refs;
 public:
     void gencode(string c_type) override {
-        const string &last_label = refs.peek();
+        const string &last_label = label_refs.peek();
         cout << "ujp " << last_label << std::endl;
     }
 
     static void AddLastLabel(const string &end_label) {
-        refs.push(end_label);
+        label_refs.push(end_label);
     }
 
-    static void RemoveLastLabel() { refs.pop(); }
+    static void RemoveLastLabel() { label_refs.pop(); }
 };
 
-MyStack<> LoopBreak::refs;
+MyStack<string> LoopBreak::label_refs;
 
 class Print : public TreeNode {
 public:
@@ -416,6 +643,7 @@ public:
 
 class Id : public TreeNode {
     string id_name;
+    OrderedDims orderedIndexes;
 
     static void print_derefs() {
         for (int i = 0; i < num_of_derefs; ++i) {
@@ -427,14 +655,53 @@ class Id : public TreeNode {
 public:
     static int num_of_derefs;
 
-    explicit Id(const string &id_n) : id_name(id_n) {}
+    explicit Id(const string id_n) : id_name(id_n) {}
+
+    Id(const string id_n, const OrderedDims &ordered_indexes) : id_name(id_n),
+                                                                orderedIndexes(ordered_indexes) {}
 
     virtual void gencode(string c_type) {
+        const Variable *var = ST.find(id_name);
+        bool is_array = ST.is_array(id_name);
+        if (var == nullptr) {
+            cout << "Variable was not declared!" << endl;
+            exit(-1);
+        }
+        if (orderedIndexes.is_initialized()) { // array
+            gencode_for_arr(c_type, var);
+            return;
+        }
         if (c_type == "codel") {
-            cout << "ldc " << ST.find(id_name) << endl;
+            cout << "ldc " << var->getAddress() << endl;
             print_derefs();
         } else if (c_type == "coder") {
-            cout << "ldc " << ST.find(id_name) << endl;
+            cout << "ldc " << var->getAddress() << endl;
+            if (!is_array)
+                cout << "ind" << endl;
+            print_derefs();
+        }
+    }
+
+    void gencode_for_arr(const string &c_type, const Variable *var) const {
+        int var_size = ST.CalcSize(var->getType());
+        OrderedDims orderedDims(var->getOrderedDims());
+        if (c_type == "codel") {
+            cout << "ldc " << var->getAddress() << endl;
+            for (int i = 0; i < orderedIndexes.get_size() - 1; ++i) {
+                cout << "ldc " << orderedIndexes[i] << endl;
+                cout << "ixa " << orderedDims[i + 1] << endl;
+            }
+            cout << "ldc " << orderedIndexes[orderedIndexes.get_size() - 1] << endl;
+            cout << "ixa " << var_size << endl;
+            print_derefs();
+        } else if (c_type == "coder") {
+            cout << "ldc " << var->getAddress() << endl;
+            for (int i = 0; i < orderedIndexes.get_size() - 1; ++i) {
+                cout << "ldc " << orderedIndexes[i] << endl;
+                cout << "ixa " << orderedDims[i + 1] << endl;
+            }
+            cout << "ldc " << orderedIndexes[orderedIndexes.get_size() - 1] << endl;
+            cout << "ixa " << var_size << endl;
             cout << "ind" << endl;
             print_derefs();
         }
@@ -798,12 +1065,13 @@ TreeNode *obj_tree(treenode *root) {
                                 return 1;
                             return recur_count_stars(root->rnode, recur_count_stars) + 1;
                         };
+
                         var_name = ((leafnode *) root->rnode->rnode)->data.sval->str;
                         num_of_stars = count_stars(root->rnode->lnode, count_stars);
                     } else if (rn_type == TN_IDENT) { // the node to the right contains the name
                         var_name = ((leafnode *) root->rnode)->data.sval->str;
                     } else if (rn_type == TN_ARRAY_DECL) { // this is an array declaration
-
+                        return new ArrayLabelAdder(root->rnode, var_type);
                     }
 
                     // Now we got all var info...
@@ -904,6 +1172,7 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->rnode);
                     } else if (root->hdr.tok == BREAK) {
                         /* break jump - for HW2! */
+                        // dany: might be used inside switch...case,then split into cases here.
                         return new LoopBreak();
                     } else if (root->hdr.tok == GOTO) {
                         /* GOTO jump - for HW2! */
@@ -922,9 +1191,11 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_INDEX: {
                     /* call for array - for HW2! */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    // collect all indexes here.
+                    ArrayIndexCollector ICollector(root);
+                    OrderedDims indexes = ICollector.get_ordered_indexes();
+                    string var_name = ICollector.get_var_name();
+                    return new Id(var_name, indexes);
                 }
 
                 case TN_DEREF: {
@@ -1142,5 +1413,5 @@ void print_symbol_table(treenode *root) {
     printf("---------------------------------------\n");
     printf("Showing the Symbol Table:\n");
 
-    ST.print();
+    SymbolTable::print();
 }
