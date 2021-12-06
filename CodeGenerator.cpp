@@ -723,11 +723,12 @@ class SwitchCond : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-
-        if (son1 != NULL) son1->gencode("coder");
-        if (son2 != NULL) son2->gencode("coder");
-        cout << "switch_end" + to_string(switch_num) + ":" << endl;
-        switch_num++;
+         if (son1 != NULL) son1->gencode("coder");
+         if (son2 != NULL) son2->gencode("coder");
+         cout<<"switch_end"+to_string(switch_num)+":"<<endl;
+         LoopBreak::RemoveLastLabel();
+         switch_num++;
+         case_num=0;
     }
 
 };
@@ -736,15 +737,15 @@ class SwitchLabel : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-        int cur_switch = switch_num;
-        int cur_case = case_num;
-        cout << "switch" << to_string(cur_switch) + "_case" + to_string(cur_case) << ":" << endl;
-        cout << "dpl" << endl;
-        if (son1 != NULL) son1->gencode("coder");
-        cout << "equ" << endl;
-        cout << "fjp " << "switch" + to_string(cur_switch) + "_case" + to_string(cur_case + 1) << endl;
-        if (son2 != NULL) son2->gencode("coder");
-        cout << "ujp " << "switch" + to_string(cur_switch) << endl;
+         int cur_switch=switch_num;
+         int cur_case=case_num;
+         cout<<"switch"+to_string(cur_switch)+"_case"+to_string(cur_case)+":"<<endl;
+         cout<<"dpl"<<endl;
+         if (son1 != NULL) son1->gencode("coder");
+         cout<<"equ"<<endl;
+         cout<<"fjp switch"+to_string(cur_switch)+"_case"+to_string(cur_case+1)<<endl;
+         LoopBreak::AddLastLabel("switch_end"+to_string(cur_switch));
+         if (son2 != NULL) son2->gencode("coder");
     }
 
 };
