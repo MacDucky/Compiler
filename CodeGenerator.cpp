@@ -1,4 +1,6 @@
 #include <iostream>
+#include <vector>
+#include <stack>
 
 using namespace std;
 
@@ -9,117 +11,33 @@ const int MAX = 100;
 
 /*****************************************************   Aux Classes   ************************************************/
 template<class T>
-class MyArray {
-    size_t n;
-    T *array;
+class MyStack : public stack<T> {
 public:
-    MyArray() : array(nullptr), n(0) {}
 
-    MyArray(size_t size) : array(new T[size]), n(size) {}
-
-    template<int>
-    explicit MyArray(size_t size):array(new int[size]), n(size) {
-        for (int i = 0; i < n; ++i) {
-            array[i] = 0;
-        }
+    // Old pop was weird, so I changed it.
+    T pop() {
+        T elem = this->top();
+        stack<T>::pop();
+        return elem;
     }
 
-    MyArray(const MyArray<T> &to_copy) {
-        if (this != &to_copy) {
-            n = to_copy.n;
-            array = new T[n];
-            for (int i = 0; i < n; i++)
-                array[i] = to_copy.array[i];
-        }
-    }
-
-    MyArray<T> &operator=(const MyArray<T> &rhs) {
-        if (this != &rhs) {
-            if (n > 0)
-                delete[] array;
-            n = rhs.n;
-            array = new T[n];
-            for (int i = 0; i < n; ++i) {
-                array[i] = rhs[i];
-            }
-        }
-        return *this;
-    }
-
-    ~MyArray() {
-        delete[] array;
-        array = nullptr;
-    }
-
-
-    T &operator[](size_t idx) {
-        if (n > 0 && idx < n) return array[idx];
-        cout << "MyArray out of bound access!" << endl;
-        exit(-1);
-    }
-
-    const T &operator[](size_t idx) const {
-        if (n > 0 && idx < n) return array[idx];
-        if (n <= 0) cout << "My array not initialized!" << endl;
-        else cout << "MyArray out of bound access" << endl;
-        exit(-1);
-    }
-
-    size_t get_size() const { return n; }
-
-    bool is_initialized() const { return n > 0; }
-};
-
-
-template<class T, int STACK_MAX = 1000>
-class MyStack {
-    T a[STACK_MAX]; // Maximum size of MyStack
-    ssize_t top;
-
-public:
-    MyStack() : top(-1) {}
-
-    /* Does NOT notify of stack overflow, default size should be sufficient.*/
-    void push(const T &x) {
-        if (top < (STACK_MAX - 1))
-            a[++top] = T(x);
-    }
-
-    const T &pop() {
-        if (top < 0) {
-            cout << "Stack popped incorrectly!" << endl;
-            exit(-1);
-        } else {
-            const T &x = a[top--];
-            return x;
-        }
-    }
-
-    const T &peek() { return a[top]; }
-
-    bool is_empty() const { return top == -1; }
-
-    size_t get_size() const { return top + 1; }
-
-    void collect(const T &x) {
-        push(x);
+    void collect(const T &to_collect) {
+        this->push(to_collect);
     }
 };
 
-typedef MyStack<int, 100> Dims;
-typedef MyStack<treenode *, 100> ASTNodes;
+typedef MyStack<int> Dims;
+typedef MyStack<treenode *> ASTNodes;
 
 template<class T>
-class OrderedArray : public MyArray<T> {
+class OrderedArray : public vector<T> {
 public:
     OrderedArray() = default;
 
-    explicit OrderedArray(const MyStack<T, 100> &stack) : MyArray<T>(stack.get_size()) {
-        MyStack<T, 100> copy(stack);
-        int size = copy.get_size();
-        for (int i = 0; i < size; ++i) {
-            const T &val = copy.pop();
-            this->operator[](i) = val;
+    explicit OrderedArray(const MyStack<T> &st) {
+        MyStack<T> copy(st);
+        while (!copy.empty()) {
+            vector<T>::push_back(copy.pop());
         }
     }
 };
@@ -128,7 +46,7 @@ class OrderedDims : public OrderedArray<int> {
 public:
     OrderedDims() = default;
 
-    explicit OrderedDims(const Dims &dims) : OrderedArray<int>(dims) {}
+    explicit OrderedDims(const Dims &st) : OrderedArray<int>(st) {}
 };
 
 class OrderedNodes : public OrderedArray<treenode *> {
@@ -150,15 +68,10 @@ class Variable {
     OrderedDims ordered_dims;
 
 public:
-//    Variable() : next(nullptr) {} // is this needed?
-
     Variable(string key, string type, int address, int size, const Dims &dims = Dims()) : identifier(key), size(size),
                                                                                           type(type), address(address),
-                                                                                          next(nullptr) {
-        if (!dims.is_empty()) {
-            ordered_dims = OrderedDims(dims);
-        }
-    }
+                                                                                          next(nullptr),
+                                                                                          ordered_dims(dims) {}
 
     const string &getIdentifier() const { return identifier; }
 
@@ -262,7 +175,7 @@ public:
             type_size = 1;
 
         //maybe insert dims into table,can't hurt right? meh...
-        while (!dims.is_empty()) {
+        while (!dims.empty()) {
             type_size *= dims.pop();
         }
 
@@ -292,7 +205,7 @@ public:
             exit(-1);
         }
         OrderedDims var_dims = var->getOrderedDims();
-        if (var_dims.get_size() > 0)
+        if (!var_dims.empty())
             return true;
         return false;
     }
@@ -377,7 +290,7 @@ public:
                                                                                    TN_ARRAY_DECL, name), type(type) {
         collect();  // collect dimensions + name.
         int size = ST.CalcSize(type, dims);
-        ST.insert(name, ST.CalcType(type, dims.get_size()), Stack_Address, size, dims);
+        ST.insert(name, ST.CalcType(type, dims.size()), Stack_Address, size, dims);
         Stack_Address += size;
     }
 
@@ -418,7 +331,7 @@ class LoopBreak : public TreeNode {
     static MyStack<string> label_refs;
 public:
     void gencode(string c_type) override {
-        const string &last_label = label_refs.peek();
+        const string &last_label = label_refs.top();
         cout << "ujp " << last_label << std::endl;
     }
 
@@ -684,7 +597,7 @@ public:
             cout << "Variable was not declared!" << endl;
             exit(-1);
         }
-        if (orderedNodes.is_initialized()) { // array
+        if (!orderedNodes.empty()) { // array
             gencode_for_arr(c_type, var);
             return;
         }
@@ -704,20 +617,20 @@ public:
         OrderedDims orderedDims(var->getOrderedDims());
         if (c_type == "codel") {
             cout << "ldc " << var->getAddress() << endl;
-            for (int i = 0; i < orderedNodes.get_size() - 1; ++i) {
+            for (int i = 0; i < orderedNodes.size() - 1; ++i) {
                 code_recur(orderedNodes[i]);
                 cout << "ixa " << orderedDims[i + 1] * var_size << endl;
             }
-            code_recur(orderedNodes[orderedNodes.get_size() - 1]);
+            code_recur(orderedNodes[orderedNodes.size() - 1]);
             cout << "ixa " << var_size << endl;
             print_derefs();
         } else if (c_type == "coder") {
             cout << "ldc " << var->getAddress() << endl;
-            for (int i = 0; i < orderedNodes.get_size() - 1; ++i) {
+            for (int i = 0; i < orderedNodes.size() - 1; ++i) {
                 code_recur(orderedNodes[i]);
                 cout << "ixa " << orderedDims[i + 1] * var_size << endl;
             }
-            code_recur(orderedNodes[orderedNodes.get_size() - 1]);
+            code_recur(orderedNodes[orderedNodes.size() - 1]);
             cout << "ixa " << var_size << endl;
             cout << "ind" << endl;
             print_derefs();
