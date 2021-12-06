@@ -715,39 +715,38 @@ public:
         cout << "not" << endl;
     }
 };
-    static int switch_num=0;
-    static int case_num=0;
-class Switch_Cond:public TreeNode {
+
+static int switch_num = 0;
+static int case_num = 0;
+
+class SwitchCond : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-        
-         if (son1 != NULL) son1->gencode("coder");
-         if (son2 != NULL) son2->gencode("coder");
-         cout<<"switch_end"<<switch_num<<endl;
-         switch_num++;
+
+        if (son1 != NULL) son1->gencode("coder");
+        if (son2 != NULL) son2->gencode("coder");
+        cout << "switch_end" + to_string(switch_num) + ":" << endl;
+        switch_num++;
     }
-    
+
 };
 
-class Switch_Label:public TreeNode {
+class SwitchLabel : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-         int cur_switch=switch_num;
-         int cur_case=case_num;
-         cout<<"switch"<<cur_switch<<_<<"case"<<cur_case<<":"<<endl;
-         cout<<"dpl"<<endl;
-         if (son1 != NULL) son1->gencode("coder");
-         cout<<"equ"<<endl;
-         cout<<"fjp"<<"switch"<<cur_switch<<_<<"case"<<cur_case+1<<endl;
-         if (son2 != NULL) son2->gencode("coder");
-         cout <<"ujp "<<"switch"<<cur_switch<<endl;
-         switch_num++;
-         
-        
+        int cur_switch = switch_num;
+        int cur_case = case_num;
+        cout << "switch" << to_string(cur_switch) + "_case" + to_string(cur_case) << ":" << endl;
+        cout << "dpl" << endl;
+        if (son1 != NULL) son1->gencode("coder");
+        cout << "equ" << endl;
+        cout << "fjp " << "switch" + to_string(cur_switch) + "_case" + to_string(cur_case + 1) << endl;
+        if (son2 != NULL) son2->gencode("coder");
+        cout << "ujp " << "switch" + to_string(cur_switch) << endl;
     }
-    
+
 };
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
@@ -1148,7 +1147,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_SWITCH: {
                     /* Switch case - for HW2! */
-                    TreeNode *switch_obj = new Switch_Cond();                    
+                    TreeNode *switch_obj = new SwitchCond();
                     switch_obj->son1 = obj_tree(root->lnode);
                     switch_obj->son2 = obj_tree(root->rnode);
                     return switch_obj;
@@ -1346,9 +1345,9 @@ TreeNode *obj_tree(treenode *root) {
                 }
 
                 case TN_LABEL: {
-                    TreeNode *switch_label = new Switch_Label();
-                    switch_label->son1=obj_tree(root->lnode);
-                    switch_label->son2=obj_tree(root->rnode);
+                    TreeNode *switch_label = new SwitchLabel();
+                    switch_label->son1 = obj_tree(root->lnode);
+                    switch_label->son2 = obj_tree(root->rnode);
                     return switch_label;
                 }
 
