@@ -8,6 +8,7 @@ using namespace std;
 #include    "CodeGenerator.h"
 
 static int Stack_Address = 5;
+static int Struct_Stack_Address = 0;
 const int MAX = 100;
 
 /*****************************************************   Aux Classes   ************************************************/
@@ -100,7 +101,7 @@ class StructDef {
     list<Variable> fields;
     static bool in_progress;
 public:
-    explicit StructDef(const string &_name) : name("struct " + _name), curr_rel_address(0) { in_progress = true; }
+    explicit StructDef(const string &_name) : name("struct " + _name), curr_rel_address(0) {}
 
     StructDef(const string &_name, const list<Variable> &var_list) : name(_name), curr_rel_address(0) {
         for (const auto &var: var_list) {
@@ -128,15 +129,63 @@ public:
         cout << "Field unfound!" << endl;
         exit(-1);
     }
+
+    int get_size() const {
+        if (in_progress) {
+            cout << "Struct not constructed yet!" << endl;
+            exit(-1);
+        }
+        return curr_rel_address;    // should be total size...
+    }
+
+    static bool is_in_progress() {
+        return in_progress;
+    }
+
+    static void start() {
+        in_progress = true;
+    }
+
+    static void finish() {
+        in_progress = false;
+    }
+
+    ~StructDef() {}
 };
 
 bool StructDef::in_progress = false;
 
+class StructFieldsGenerated {
+    list<Variable> fields;
+public:
+    void add_field(const Variable &field) { fields.push_back(field); }
+
+    void reset() { fields.clear(); }
+
+    list<Variable> get_sfg() const { return fields; }
+};
+
+class StructDefinitions {
+    list<StructDef> struct_defs;
+public:
+    void add_definition(const StructDef &struct_def) { struct_defs.push_back(struct_def); }
+
+    const StructDef &find_def(const string &strct_type) const {
+        for (const auto &def: struct_defs) {
+            if (def.get_name() == strct_type)
+                return def;
+        }
+        cout << "Struct definition not found!" << endl;
+        exit(-1);
+    }
+};
 
 class SymbolTable {
     /* Think! what can you add to  symbol_table */
     Variable *head[MAX];
-    list<StructDef> struct_definitions;
+//    list<StructDef> struct_definitions;
+    StructFieldsGenerated sfg;
+    StructDefinitions sd;
 
     struct {
         const string i;
@@ -151,8 +200,9 @@ class SymbolTable {
 
 public:
     SymbolTable() : base_t({"int", "float", "double", "pointer"}) {
-        for (int i = 0; i < MAX; i++)
+        for (int i = 0; i < MAX; i++) {
             head[i] = nullptr;
+        }
     }
 
     // Function to find a variable, nullptr is returned if not found.
@@ -176,6 +226,11 @@ public:
     bool insert(const string &id, const string &type, int address, int size, const Dims &dims = Dims()) {
         int index = hashf(id);
         Variable *p = new Variable(id, type, address, size, dims);
+        if (StructDef::is_in_progress()) {
+            sfg.add_field(*p);
+            delete p;
+            return true;
+        }
 
         if (head[index] == nullptr) {
             head[index] = p;
@@ -187,7 +242,32 @@ public:
             start->next = p;
             return true;
         }
+        return false;
+    }
 
+    // Function to insert an identifier
+    bool insert(Variable *var) {
+        int index = hashf(var->identifier);
+        Variable *p = var;
+        Variable **ref;
+        if (StructDef::is_in_progress()) {
+            sfg.add_field(*p);
+            delete p;
+            return true;
+        } else {
+            ref = head;
+        }
+
+        if (ref[index] == nullptr) {
+            ref[index] = p;
+            return true;
+        } else {
+            Variable *start = ref[index];
+            while (start->next != nullptr)
+                start = start->next;
+            start->next = p;
+            return true;
+        }
         return false;
     }
 
@@ -221,6 +301,9 @@ public:
         if (t.find('*') != string::npos) t = "pointer";
         if (base_t.isBasic(t))  // int,float,double,pointer
             type_size = 1;
+        else {
+            type_size = sd.find_def(type).get_size();
+        }
 
         //maybe insert dims into table,can't hurt right? meh...
         while (!dims.empty()) {
@@ -258,6 +341,8 @@ public:
         return false;
     }
 
+    list<Variable> get_generated_fields() const { return sfg.get_sfg(); }
+
     ~SymbolTable() {
         for (auto var: head) {
             if (var) delete var->next;
@@ -266,7 +351,12 @@ public:
     }
 
     void add_struct_definition(const StructDef &structDef) {
-        struct_definitions.push_back(structDef);
+        sfg.reset();
+        sd.add_definition(structDef);
+    }
+
+    const StructDef &get_struct_definition(string struct_type) const {
+        return sd.find_def(struct_type);
     }
 };
 
@@ -275,8 +365,8 @@ SymbolTable ST;
 class TreeNode { //base class
 public:
     /*you can add another son nodes */
-    TreeNode *son1 = nullptr;
-    TreeNode *son2 = nullptr;
+    TreeNode *son1;
+    TreeNode *son2;
 
     virtual ~TreeNode() {
         delete son1;
@@ -377,7 +467,11 @@ public:
         collect();  // collect dimensions + name.
         int size = ST.CalcSize(type, dims);
         ST.insert(name, ST.CalcType(type, dims.size()), Stack_Address, size, dims);
-        Stack_Address += size;
+        if (StructDef::is_in_progress()) {
+            Struct_Stack_Address += size;
+        } else {
+            Stack_Address += size;
+        }
     }
 
     int right_field_selector(treenode *to_collect_from) override {
@@ -837,6 +931,30 @@ public:
 
 };
 
+class StructPtr {
+    treenode *decl_node;
+    string name;
+
+    string getNameInternal(treenode *curr) {
+        if (name.empty()) {
+            if (!curr) {
+                return "";
+            }
+            if (curr && !curr->rnode)
+                return reinterpret_cast<leafnode *>(curr)->data.sval->str;
+            return getNameInternal(curr->rnode);
+        }
+        return name;
+    }
+
+public:
+
+    StructPtr(treenode *decl_node) : decl_node(decl_node) {
+        treenode *curr = decl_node;
+        name = getNameInternal(curr);
+    }
+};
+
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
@@ -850,6 +968,12 @@ public:
 int code_recur(treenode *root) {
     TreeNode *tree_root = obj_tree(root);
     tree_root->gencode();
+    delete tree_root;
+    return SUCCESS;
+}
+
+int build_tree_recur(treenode *root) {
+    TreeNode *tree_root = obj_tree(root);
     delete tree_root;
     return SUCCESS;
 }
@@ -1084,30 +1208,40 @@ TreeNode *obj_tree(treenode *root) {
                 }
 
                 case TN_TYPE_LIST: {
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    return nullptr;
+                    TreeNode *treeNode = new TreeNode();
+                    treeNode->son1 = obj_tree(root->lnode);
+                    treeNode->son2 = obj_tree(root->rnode);
+                    return treeNode;
                 }
 
-                case TN_COMP_DECL: {
-                    /* struct component declaration - for HW2 */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
-                }
-
+                case TN_COMP_DECL:  // same as regular decl
                 case TN_DECL: {   /* structs declaration - for HW2 */
-                    // Dany: for future use.
                     string var_type, var_name;
                     int num_of_stars = 0;
 
+                    if (root->hdr.type == TN_COMP_DECL) { // struct decl
+                        if (root->rnode->hdr.type == TN_DECL) {  // pointer to struct
+
+//                            StructPtr *a = new StructPtr(root,);
+//                            ST.insert(a);
+                        } else { // struct
+
+                        }
+                    }
                     // var type
                     if (root->lnode->hdr.type == TN_TYPE_LIST) {
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
                     }
 
-                    if (var_type == "struct")
-                        return new TreeNode(obj_tree(root->lnode), nullptr);
+
+                    if (var_type == "struct") {
+                        if (root->lnode->lnode->hdr.type == TN_OBJ_REF) { // Instantiation.
+                            string struct_type = reinterpret_cast<leafnode *>(root->lnode->lnode->lnode)->data.sval->str;
+                            var_type += " " + struct_type;
+                        } else { // Definition.
+                            return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
+                        }
+                    }
 
                     tn_t rn_type = root->rnode->hdr.type;
                     if (rn_type == TN_DECL) { // this is a pointer declaration.
@@ -1130,8 +1264,16 @@ TreeNode *obj_tree(treenode *root) {
                     // Now we got all var info...
                     if (!var_name.empty() and !var_type.empty()) {
                         // adding to symbol table.
-                        ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address++,
-                                  ST.CalcSize(var_type));
+                        if (StructDef::is_in_progress()) {
+                            ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Struct_Stack_Address++,
+                                      ST.CalcSize(var_type));
+                        } else {
+                            int var_size = ST.CalcSize(var_type);
+                            ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address,
+                                      var_size);
+                            Stack_Address += var_size;
+                        }
+
                     }
 
                     return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
@@ -1203,14 +1345,27 @@ TreeNode *obj_tree(treenode *root) {
                         // Give the struct a name.
                         string struct_name(reinterpret_cast<leafnode *>(root->lnode)->data.sval->str);
                         StructDef struct_definer(struct_name);
+                        StructDef::start();
 
                         // Collect (field) component nodes.
                         StructFieldCollector collector(root->rnode);
                         const FieldNodes &field_nodes = collector.get_field_nodes();
 
+                        for (const auto &node: field_nodes) {
+                            build_tree_recur(node);
+                        }
 
-                        int i = 0;
-                    } else
+                        list<Variable> fields = ST.get_generated_fields();
+                        for (auto &field: fields) {
+                            struct_definer.add_field(field);
+                        }
+
+                        // symbol table already clears sfg...
+                        ST.add_struct_definition(struct_definer);
+
+                        StructDef::finish();
+                        return nullptr;
+                    } else  // enums or something else don't matter...
                         return nullptr;
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
@@ -1219,6 +1374,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_OBJ_REF: {
                     /* Maybe you will use it later */
+
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
