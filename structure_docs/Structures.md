@@ -6,4 +6,6 @@
 
 ![](struct_decl2.drawio.png)
 
+![](struct_decl3.drawio.png)
+
 Also, XML file was added for small edits in diagram if needed...
