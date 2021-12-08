@@ -138,6 +138,8 @@ public:
         return curr_rel_address;    // should be total size...
     }
 
+    list<Variable> get_fields() const { return fields; }
+
     static bool is_in_progress() {
         return in_progress;
     }
@@ -955,6 +957,59 @@ public:
     }
 };
 
+class StructDot : public TreeNode {
+    string struct_name;
+    string field;
+public:
+    StructDot(const string &struct_name, const string &field) : struct_name(struct_name), field(field) {}
+
+    void gencode(string c_type) override {
+        const Variable *strct = ST.find(struct_name);
+        int abs_address = strct->getAddress();
+        string struct_type = strct->getType();
+        const StructDef &definition = ST.get_struct_definition(struct_type);
+        list<Variable> fields = definition.get_fields();
+        cout << "ldc " << abs_address << endl;
+        int rel_address = 0;
+        for (const auto _field: fields) {
+            if (this->field == _field.getIdentifier())
+                break;
+            rel_address += _field.getSize();
+        }
+        cout << "inc " << rel_address << endl;
+        if (c_type == "coder") {
+            cout << "ind" << endl;
+        }
+    }
+};
+
+class StructArrow : public TreeNode {
+    string struct_name;
+    string field;
+public:
+    StructArrow(const string &struct_name, const string &field) : struct_name(struct_name), field(field) {}
+
+    void gencode(string c_type) override {
+        const Variable *strct = ST.find(struct_name);
+        int abs_address = strct->getAddress();
+        string struct_type = strct->getType();
+        const StructDef &definition = ST.get_struct_definition(struct_type);
+        list<Variable> fields = definition.get_fields();
+        cout << "ldc " << abs_address << endl;
+        cout << "ind" << endl;
+        int rel_address = 0;
+        for (const auto _field: fields) {
+            if (this->field == _field.getIdentifier())
+                break;
+            rel_address += _field.getSize();
+        }
+        cout << "inc " << rel_address << endl;
+        if (c_type == "coder") {
+            cout << "ind" << endl;
+        }
+    }
+};
+
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
 
@@ -1436,8 +1491,9 @@ TreeNode *obj_tree(treenode *root) {
                     } else {
                         /* Struct select case "." */
                         /* e.g. struct_variable.x; */
-                        obj_tree(root->lnode);
-                        obj_tree(root->rnode);
+                        string struct_name = reinterpret_cast<leafnode *>(root->lnode)->data.sval->str;
+                        string struct_field = reinterpret_cast<leafnode *>(root->rnode)->data.sval->str;
+                        return new StructDot(struct_name, struct_field);
                     }
                     break;
                 }
