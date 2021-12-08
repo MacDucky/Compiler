@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <stack>
+#include <list>
 
 using namespace std;
 
@@ -46,6 +47,8 @@ class OrderedDims : public OrderedArray<int> {
 public:
     OrderedDims() = default;
 
+    OrderedDims(const OrderedDims &copy) = default;
+
     explicit OrderedDims(const Dims &st) : OrderedArray<int>(st) {}
 };
 
@@ -73,6 +76,11 @@ public:
                                                                                           next(nullptr),
                                                                                           ordered_dims(dims) {}
 
+    Variable(string key, string type, int address, int size, const OrderedDims &o_dims) : identifier(key), size(size),
+                                                                                          type(type), address(address),
+                                                                                          next(nullptr),
+                                                                                          ordered_dims(o_dims) {}
+
     const string &getIdentifier() const { return identifier; }
 
     const string &getType() const { return type; }
@@ -86,9 +94,49 @@ public:
     friend class SymbolTable;
 };
 
+class StructDef {
+    string name;
+    int curr_rel_address;
+    list<Variable> fields;
+    static bool in_progress;
+public:
+    explicit StructDef(const string &_name) : name("struct " + _name), curr_rel_address(0) { in_progress = true; }
+
+    StructDef(const string &_name, const list<Variable> &var_list) : name(_name), curr_rel_address(0) {
+        for (const auto &var: var_list) {
+            add_field(var);
+        }
+    }
+
+    void add_field(const Variable &field) {
+        const string &identifier(field.getIdentifier()), &type(field.getType());
+        int size(field.getSize());
+        fields.emplace_back(identifier, type, curr_rel_address, size, field.getOrderedDims());
+        curr_rel_address += field.getSize();
+    }
+
+    const string &get_name() const {
+        return name;
+    }
+
+    Variable get_field(const string &field_name) const {
+        for (const auto &field: fields) {
+            if (field_name == field.getIdentifier()) {
+                return field;
+            }
+        }
+        cout << "Field unfound!" << endl;
+        exit(-1);
+    }
+};
+
+bool StructDef::in_progress = false;
+
+
 class SymbolTable {
     /* Think! what can you add to  symbol_table */
     Variable *head[MAX];
+    list<StructDef> struct_definitions;
 
     struct {
         const string i;
@@ -216,6 +264,10 @@ public:
             delete var;
         }
     }
+
+    void add_struct_definition(const StructDef &structDef) {
+        struct_definitions.push_back(structDef);
+    }
 };
 
 SymbolTable ST;
@@ -279,8 +331,42 @@ public:
     virtual LeftField left_field_selector(treenode *to_collect_from) = 0;
 };
 
+typedef list<treenode *> FieldNodes;
+
+class StructComponentCollectorO {
+    FieldNodes components;
+public:
+    void collect(treenode *component) { components.push_front(component); }
+
+    const list<treenode *> &get_components() const { return components; }
+};
+
+class StructFieldCollector : public Collector<StructComponentCollectorO, treenode *, treenode *> {
+    StructComponentCollectorO collector;
+    treenode *left_field;
+public:
+    StructFieldCollector(treenode *field_list_node) : Collector<StructComponentCollectorO, treenode *, treenode *>(
+            field_list_node, collector, TN_FIELD_LIST, left_field) {
+        collect();
+        collector.collect(left_field);
+    }
+
+    treenode *right_field_selector(treenode *to_collect_from) override {
+        return to_collect_from;
+    }
+
+    treenode *left_field_selector(treenode *to_collect_from) override {
+        return to_collect_from;
+    }
+
+    const FieldNodes &get_field_nodes() const {
+        return collector.get_components();
+    }
+
+};
+
 // This class adds labels to ST, it does NOT create pcode.
-class ArrayLabelAdder : public TreeNode, public Collector<Dims> {
+class ArrayLabelAdder : public Collector<Dims> {
     Dims dims;
     string type;
     string name;
@@ -723,12 +809,12 @@ class SwitchCond : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-         if (son1 != NULL) son1->gencode("coder");
-         if (son2 != NULL) son2->gencode("coder");
-         cout<<"switch_end"+to_string(switch_num)+":"<<endl;
-         LoopBreak::RemoveLastLabel();
-         switch_num++;
-         case_num=0;
+        if (son1 != NULL) son1->gencode("coder");
+        if (son2 != NULL) son2->gencode("coder");
+        cout << "switch_end" + to_string(switch_num) + ":" << endl;
+        LoopBreak::RemoveLastLabel();
+        switch_num++;
+        case_num = 0;
     }
 
 };
@@ -737,16 +823,16 @@ class SwitchLabel : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-         int cur_switch=switch_num;
-         int cur_case=case_num;
-         cout<<"switch"+to_string(cur_switch)+"_case"+to_string(cur_case)+":"<<endl;
-         cout<<"dpl"<<endl;
-         if (son1 != NULL) son1->gencode("coder");
-         cout<<"equ"<<endl;
-         cout<<"fjp switch"+to_string(cur_switch)+"_case"+to_string(cur_case+1)<<endl;
-         LoopBreak::AddLastLabel("switch_end"+to_string(cur_switch)+":");
-         case_num++;
-         if (son2 != NULL) son2->gencode("coder");
+        int cur_switch = switch_num;
+        int cur_case = case_num;
+        cout << "switch" + to_string(cur_switch) + "_case" + to_string(cur_case) + ":" << endl;
+        cout << "dpl" << endl;
+        if (son1 != NULL) son1->gencode("coder");
+        cout << "equ" << endl;
+        cout << "fjp switch" + to_string(cur_switch) + "_case" + to_string(cur_case + 1) << endl;
+        LoopBreak::AddLastLabel("switch_end" + to_string(cur_switch) + ":");
+        case_num++;
+        if (son2 != NULL) son2->gencode("coder");
     }
 
 };
@@ -980,9 +1066,7 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_FIELD_LIST: {
                     /* Maybe you will use it later */
-                    obj_tree(root->lnode);
-                    obj_tree(root->rnode);
-                    break;
+                    return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                 }
 
                 case TN_PARAM_LIST: {
@@ -1022,6 +1106,9 @@ TreeNode *obj_tree(treenode *root) {
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
                     }
 
+                    if (var_type == "struct")
+                        return new TreeNode(obj_tree(root->lnode), nullptr);
+
                     tn_t rn_type = root->rnode->hdr.type;
                     if (rn_type == TN_DECL) { // this is a pointer declaration.
 
@@ -1036,7 +1123,8 @@ TreeNode *obj_tree(treenode *root) {
                     } else if (rn_type == TN_IDENT) { // the node to the right contains the name
                         var_name = ((leafnode *) root->rnode)->data.sval->str;
                     } else if (rn_type == TN_ARRAY_DECL) { // this is an array declaration
-                        return new ArrayLabelAdder(root->rnode, var_type);
+                        ArrayLabelAdder(root->rnode, var_type);
+                        return nullptr;
                     }
 
                     // Now we got all var info...
@@ -1111,6 +1199,19 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_OBJ_DEF: {
                     /* Maybe you will use it later */
+                    if (string(toksym(root->hdr.tok, 0)) == "struct") {
+                        // Give the struct a name.
+                        string struct_name(reinterpret_cast<leafnode *>(root->lnode)->data.sval->str);
+                        StructDef struct_definer(struct_name);
+
+                        // Collect (field) component nodes.
+                        StructFieldCollector collector(root->rnode);
+                        const FieldNodes &field_nodes = collector.get_field_nodes();
+
+
+                        int i = 0;
+                    } else
+                        return nullptr;
                     obj_tree(root->lnode);
                     obj_tree(root->rnode);
                     break;
