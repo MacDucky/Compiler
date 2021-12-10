@@ -552,7 +552,7 @@ public:
         collect();  // collect dimensions + name.
         int size = ST.CalcSize(type, dims);
         int &address = StructDef::is_in_progress() ? Struct_Stack_Address : Stack_Address;
-        ST.insert(name, ST.CalcType(type, dims.size()), address, size, dims);
+        ST.insert(name, type, address, size, dims);
         address += size;
     }
 
@@ -845,6 +845,53 @@ public:
     }
 };
 
+class Index : public TreeNode {
+    static int size_of_basic;
+    static OrderedDims *current_dims;
+    int _dim_ptr;
+public:
+    Index(treenode *lnode, treenode *rnode) : TreeNode(obj_tree(lnode), obj_tree(rnode)) {
+        if (!current_dims) {
+            _dim_ptr = -1;
+        } else {
+            _dim_ptr = 1;
+        }
+    }
+
+    void gencode(string c_type) override {
+        son1->gencode("codel");
+        son2->gencode("coder");
+        if (size_of_basic == 0) {
+            cout << "Size was not defined!" << endl;
+            exit(-1);
+        }
+        if (_dim_ptr == -1) {
+            cout << "ixa " << size_of_basic << endl;
+        } else {
+            cout << "ixa " << (*current_dims)[_dim_ptr] * size_of_basic << endl;
+            if ((*current_dims).size() - 1 == _dim_ptr) {
+                _dim_ptr = -1;
+            } else {
+                _dim_ptr++;
+            }
+        }
+        if (c_type == "coder")
+            cout << "ind" << endl;
+    }
+
+    static void setSizeOfBasic(int sizeOfBasic) {
+        size_of_basic = sizeOfBasic;
+    }
+
+    static void setCurrentDims(OrderedDims *currentDims) {
+        current_dims = currentDims;
+    }
+
+};
+
+int Index::size_of_basic = 0;
+OrderedDims *Index::current_dims = nullptr;
+
 
 class Id : public TreeNode {
     string id_name;
@@ -861,51 +908,20 @@ public:
                                                                orderedNodes(ordered_nodes),
                                                                _var(nullptr) {}
 
-    Id(const Variable *var) : _var(var) {}
-
     virtual void gencode(string c_type) {
-        const Variable *var = (_var) ? _var : ST.find(id_name);
-        bool is_array = ST.is_array(id_name);
+        const Variable *var = ST.find(id_name);
         if (var == nullptr) {
             cout << "Variable was not declared!" << endl;
             exit(-1);
         }
-        if (!orderedNodes.empty()) { // array
-            gencode_for_arr(c_type, var);
-            return;
-        }
         if (c_type == "codel") {
             cout << "ldc " << var->getAddress() << endl;
         } else if (c_type == "coder") {
             cout << "ldc " << var->getAddress() << endl;
-            if (!is_array)
-                cout << "ind" << endl;
+            cout << "ind" << endl;
         }
         if (var->is_heap_allocd())
             delete var;
-    }
-
-    void gencode_for_arr(const string &c_type, const Variable *var) const {
-        int var_size = ST.CalcSize(var->getType());
-        OrderedDims orderedDims(var->getOrderedDims());
-        if (c_type == "codel") {
-            cout << "ldc " << var->getAddress() << endl;
-            for (int i = 0; i < orderedNodes.size() - 1; ++i) {
-                code_recur(orderedNodes[i]);
-                cout << "ixa " << orderedDims[i + 1] * var_size << endl;
-            }
-            code_recur(orderedNodes[orderedNodes.size() - 1]);
-            cout << "ixa " << var_size << endl;
-        } else if (c_type == "coder") {
-            cout << "ldc " << var->getAddress() << endl;
-            for (int i = 0; i < orderedNodes.size() - 1; ++i) {
-                code_recur(orderedNodes[i]);
-                cout << "ixa " << orderedDims[i + 1] * var_size << endl;
-            }
-            code_recur(orderedNodes[orderedNodes.size() - 1]);
-            cout << "ixa " << var_size << endl;
-            cout << "ind" << endl;
-        }
     }
 
 };
@@ -1532,23 +1548,20 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_INDEX: {
                     /* call for array - for HW2! */
-                    // collect all indexes here.
-                    ArrayIndexCollector ICollector(root);
-                    OrderedNodes nodes = ICollector.get_ordered_nodes();
-                    string var_name = ICollector.get_var_name();
-                    regex re(R"(\.|->)");   // '.' or '->' tokens.
-                    vector<string> tokenized = tokenize(var_name, re);
-                    if (tokenized.size() > 1) {
-                        for (int i = 0; i < tokenized.size() - 1; ++i) {
-                            string left(tokenized[i]),right(tokenized[i+1]);
-                            if(i==0){   // load address
-
-                            }
-                            //load offset
+                    if (root->lnode->hdr.type == TN_IDENT) {  //array name
+                        string name = reinterpret_cast<leafnode *>(root->lnode)->data.sval->str;
+                        if (ST.is_array(name)) {
+                            const Variable *var = ST.find(name);
+                            string type = var->getType();
+                            const OrderedDims &dims = var->getOrderedDims();
+                            Index::setCurrentDims(const_cast<OrderedDims *>(&dims));
+                            Index::setSizeOfBasic(ST.CalcSize(type));
                         }
-                    } else {
-                        return new Id(tokenized.back(), nodes);
+                    } else if (root->lnode->hdr.type == TN_DEREF) { // just a pointer
+                        Index::setCurrentDims(nullptr);
+                        Index::setSizeOfBasic(1);
                     }
+                    return new Index(root->lnode, root->rnode);
                 }
 
                 case TN_DEREF: {
