@@ -2,6 +2,8 @@
 #include <vector>
 #include <stack>
 #include <list>
+#include <regex>
+#include <algorithm>
 
 using namespace std;
 
@@ -12,6 +14,18 @@ static int Struct_Stack_Address = 0;
 const int MAX = 100;
 
 /*****************************************************   Aux Classes   ************************************************/
+vector<string> tokenize(const string str, const regex re) {
+    sregex_token_iterator it{str.begin(), str.end(), re, -1};
+    vector<string> tokenized{it, {}};
+
+    // Additional check to remove empty strings
+    tokenized.erase(std::remove_if(tokenized.begin(), tokenized.end(),
+                                   [](std::string const &s) {
+                                       return s.size() == 0;
+                                   }), tokenized.end());
+    return tokenized;
+}
+
 template<class T>
 class MyStack : public stack<T> {
 public:
@@ -70,17 +84,23 @@ class Variable {
     int address, size;
     Variable *next;
     OrderedDims ordered_dims;
+    bool heap_allocd;
+    list<Variable> fields;
 
 public:
-    Variable(string key, string type, int address, int size, const Dims &dims = Dims()) : identifier(key), size(size),
-                                                                                          type(type), address(address),
-                                                                                          next(nullptr),
-                                                                                          ordered_dims(dims) {}
+    Variable(string key, string type, int address, int size, const Dims &dims = Dims(), bool heap_allocd = false,
+             list<Variable> fields = list<Variable>())
+            : identifier(key), size(size),
+              type(type), address(address),
+              next(nullptr),
+              ordered_dims(dims), heap_allocd(heap_allocd), fields(fields) {}
 
-    Variable(string key, string type, int address, int size, const OrderedDims &o_dims) : identifier(key), size(size),
-                                                                                          type(type), address(address),
-                                                                                          next(nullptr),
-                                                                                          ordered_dims(o_dims) {}
+    Variable(string key, string type, int address, int size, const OrderedDims &o_dims, bool heap_allocd = false,
+             list<Variable> fields = list<Variable>())
+            : identifier(key), size(size),
+              type(type), address(address),
+              next(nullptr),
+              ordered_dims(o_dims), heap_allocd(heap_allocd), fields(fields) {}
 
     const string &getIdentifier() const { return identifier; }
 
@@ -92,28 +112,49 @@ public:
 
     const OrderedDims &getOrderedDims() const { return ordered_dims; }
 
+    bool is_heap_allocd() const { return heap_allocd; }
+
+    static list<Variable> get_fields(int absolute_address, const list<Variable> &fields) {
+        int abs_address = absolute_address;  // struct starting address.
+        list<Variable> abs_fields;
+        for (const auto &field: fields) {
+            Variable copy(field);
+            copy.address = abs_address;
+            abs_address += field.size;
+            abs_fields.push_back(copy);
+        }
+        return abs_fields;
+    }
+
+    const list<Variable> &get_fields_rel() const {
+        return fields;
+    }
+
     friend class SymbolTable;
 };
 
 class StructDef {
     string name;
     int curr_rel_address;
+    int size;
     list<Variable> fields;
     static bool in_progress;
 public:
-    explicit StructDef(const string &_name) : name("struct " + _name), curr_rel_address(0) {}
+    explicit StructDef(const string &_name) : name("struct " + _name), curr_rel_address(0), size(-1) {}
 
-    StructDef(const string &_name, const list<Variable> &var_list) : name(_name), curr_rel_address(0) {
+    StructDef(const string &_name, const list<Variable> &var_list) : name(_name), curr_rel_address(0), size(-1) {
         for (const auto &var: var_list) {
             add_field(var);
         }
     }
 
-    void add_field(const Variable &field) {
+    void add_field(const Variable &field, bool single_field = false) {
         const string &identifier(field.getIdentifier()), &type(field.getType());
-        int size(field.getSize());
-        fields.emplace_back(identifier, type, curr_rel_address, size, field.getOrderedDims());
+        int f_size(field.getSize());
+        fields.emplace_back(identifier, type, curr_rel_address, f_size, field.getOrderedDims());
         curr_rel_address += field.getSize();
+        if (single_field)
+            size = curr_rel_address;
     }
 
     const string &get_name() const {
@@ -131,11 +172,11 @@ public:
     }
 
     int get_size() const {
-        if (in_progress) {
+        if (size == -1) {
             cout << "Struct not constructed yet!" << endl;
             exit(-1);
         }
-        return curr_rel_address;    // should be total size...
+        return size;
     }
 
     list<Variable> get_fields() const { return fields; }
@@ -144,12 +185,14 @@ public:
         return in_progress;
     }
 
-    static void start() {
+    void start() {
         in_progress = true;
     }
 
-    static void finish() {
+    void finish() {
         in_progress = false;
+        size = curr_rel_address;    // at the end should be total size.
+        Struct_Stack_Address = 0;
     }
 
     ~StructDef() {}
@@ -174,7 +217,7 @@ public:
 
     const StructDef &find_def(const string &strct_type) const {
         for (const auto &def: struct_defs) {
-            if (def.get_name() == strct_type)
+            if (strct_type.find(def.get_name()) != string::npos)
                 return def;
         }
         cout << "Struct definition not found!" << endl;
@@ -209,13 +252,34 @@ public:
 
     // Function to find a variable, nullptr is returned if not found.
     const Variable *find(const string &id) {
-        int index = hashf(id);
+        bool is_struct_field = false;
+        string struct_id, struct_field;
+        auto iter = id.find('.');
+        if (iter != string::npos) {
+            struct_id = id.substr(0, iter);
+            struct_field = id.substr(iter + 1);
+            is_struct_field = true;
+        }
+        int index = is_struct_field ? hashf(struct_id) : hashf(id);
         Variable *start = head[index];
 
         if (start == nullptr)
             return nullptr;
 
         while (start != nullptr) {
+            if (start->identifier == struct_id && is_struct_field) {
+                string struct_type = start->getType();
+                const StructDef &s_def = get_struct_definition(struct_type);
+                const Variable field = s_def.get_field(struct_field);
+
+                string f_id = field.identifier;
+                string f_type = field.type;
+                int f_address = start->address + field.address;
+                int f_size = field.size;
+                OrderedDims f_dims = field.getOrderedDims();
+
+                return new Variable(f_id, f_type, f_address, f_size, f_dims, true);
+            }
             if (start->identifier == id) {
                 return start;
             }
@@ -225,9 +289,11 @@ public:
     }
 
     // Function to insert an identifier
-    bool insert(const string &id, const string &type, int address, int size, const Dims &dims = Dims()) {
+    bool insert(const string &id, const string &type, int address, int size, const Dims &dims = Dims(),
+                list<Variable> fields = list<Variable>()) {
         int index = hashf(id);
-        Variable *p = new Variable(id, type, address, size, dims);
+        list<Variable> fields_to_insert = StructDef::is_in_progress() ? fields : Variable::get_fields(address, fields);
+        Variable *p = new Variable(id, type, address, size, dims, false, fields_to_insert);
         if (StructDef::is_in_progress()) {
             sfg.add_field(*p);
             delete p;
@@ -326,6 +392,10 @@ public:
             exit(-1);
         }
         const string &var_type = var->getType();
+
+        if (var->is_heap_allocd())
+            delete var;
+
         if (var_type.find('*') != string::npos)
             return true;
         return false;
@@ -338,6 +408,10 @@ public:
             exit(-1);
         }
         OrderedDims var_dims = var->getOrderedDims();
+
+        if (var->is_heap_allocd())
+            delete var;
+
         if (!var_dims.empty())
             return true;
         return false;
@@ -353,8 +427,8 @@ public:
     }
 
     void add_struct_definition(const StructDef &structDef) {
-        sfg.reset();
         sd.add_definition(structDef);
+        sfg.reset();
     }
 
     const StructDef &get_struct_definition(string struct_type) const {
@@ -397,6 +471,7 @@ class Collector {
     const treenode *start;
     CollectorObject &collector_o;     // container with collect method
     LeftField &left_field;
+protected:
     tn_t follow_up_node;
 public:
     Collector(const treenode *start, CollectorObject &collector, tn_t follow_up_node_type, LeftField &left_field)
@@ -444,10 +519,18 @@ public:
     }
 
     treenode *right_field_selector(treenode *to_collect_from) override {
+        if (to_collect_from->hdr.type != TN_COMP_DECL) {
+            cout << "RNode Selector: Wrong node collected!" << endl;
+            exit(-1);
+        }
         return to_collect_from;
     }
 
     treenode *left_field_selector(treenode *to_collect_from) override {
+        if (to_collect_from->hdr.type != TN_COMP_DECL) {
+            cout << "LNode Selector: Wrong node collected!" << endl;
+            exit(-1);
+        }
         return to_collect_from;
     }
 
@@ -468,12 +551,9 @@ public:
                                                                                    TN_ARRAY_DECL, name), type(type) {
         collect();  // collect dimensions + name.
         int size = ST.CalcSize(type, dims);
-        ST.insert(name, ST.CalcType(type, dims.size()), Stack_Address, size, dims);
-        if (StructDef::is_in_progress()) {
-            Struct_Stack_Address += size;
-        } else {
-            Stack_Address += size;
-        }
+        int &address = StructDef::is_in_progress() ? Struct_Stack_Address : Stack_Address;
+        ST.insert(name, ST.CalcType(type, dims.size()), address, size, dims);
+        address += size;
     }
 
     int right_field_selector(treenode *to_collect_from) override {
@@ -500,7 +580,20 @@ public:
     }
 
     string left_field_selector(treenode *to_collect_from) override {
-        return reinterpret_cast<leafnode *>(to_collect_from)->data.sval->str;
+        if (!to_collect_from)
+            return "";
+        if (to_collect_from->hdr.type == TN_SELECT) {
+            string field = reinterpret_cast<leafnode *>(to_collect_from->rnode)->data.sval->str;
+            bool is_dot = to_collect_from->hdr.tok == DOT;
+            string op = is_dot ? "." : "->";
+            if (to_collect_from->lnode && to_collect_from->lnode->hdr.type == TN_SELECT) {
+                return left_field_selector(to_collect_from->lnode) + op + field;
+            }
+            string instance_name = reinterpret_cast<leafnode *>(to_collect_from->lnode)->data.sval->str;
+            return instance_name + op + field;
+        } else {
+            return reinterpret_cast<leafnode *>(to_collect_from)->data.sval->str;
+        }
     }
 
     OrderedNodes get_ordered_nodes() const { return OrderedNodes(treenodes); }
@@ -757,12 +850,7 @@ class Id : public TreeNode {
     string id_name;
     OrderedNodes orderedNodes;
 
-    static void print_derefs() {
-        for (int i = 0; i < num_of_derefs; ++i) {
-            cout << "ind" << endl;
-        }
-        num_of_derefs = 0;
-    }
+    const Variable *_var;
 
 public:
     static int num_of_derefs;
@@ -770,10 +858,13 @@ public:
     explicit Id(const string id_n) : id_name(id_n) {}
 
     Id(const string id_n, const OrderedNodes &ordered_nodes) : id_name(id_n),
-                                                               orderedNodes(ordered_nodes) {}
+                                                               orderedNodes(ordered_nodes),
+                                                               _var(nullptr) {}
+
+    Id(const Variable *var) : _var(var) {}
 
     virtual void gencode(string c_type) {
-        const Variable *var = ST.find(id_name);
+        const Variable *var = (_var) ? _var : ST.find(id_name);
         bool is_array = ST.is_array(id_name);
         if (var == nullptr) {
             cout << "Variable was not declared!" << endl;
@@ -785,13 +876,13 @@ public:
         }
         if (c_type == "codel") {
             cout << "ldc " << var->getAddress() << endl;
-            print_derefs();
         } else if (c_type == "coder") {
             cout << "ldc " << var->getAddress() << endl;
             if (!is_array)
                 cout << "ind" << endl;
-            print_derefs();
         }
+        if (var->is_heap_allocd())
+            delete var;
     }
 
     void gencode_for_arr(const string &c_type, const Variable *var) const {
@@ -805,7 +896,6 @@ public:
             }
             code_recur(orderedNodes[orderedNodes.size() - 1]);
             cout << "ixa " << var_size << endl;
-            print_derefs();
         } else if (c_type == "coder") {
             cout << "ldc " << var->getAddress() << endl;
             for (int i = 0; i < orderedNodes.size() - 1; ++i) {
@@ -815,23 +905,11 @@ public:
             code_recur(orderedNodes[orderedNodes.size() - 1]);
             cout << "ixa " << var_size << endl;
             cout << "ind" << endl;
-            print_derefs();
         }
     }
 
 };
 
-int Id::num_of_derefs = 0;
-
-class PtrDeref : public TreeNode {
-public:
-    explicit PtrDeref(treenode *rnode) : TreeNode(nullptr, obj_tree(rnode)) {}
-
-    void gencode(string c_type) override {
-        Id::num_of_derefs++;
-        son2->gencode(c_type);
-    }
-};
 
 class Num : public TreeNode {
     int value;
@@ -919,63 +997,64 @@ class SwitchLabel : public TreeNode {
 
 public:
     virtual void gencode(string c_type) {
-         int cur_switch=switch_num;
-         int cur_case=case_num;
-         cout<<"switch"+to_string(cur_switch)+"_case"+to_string(cur_case)+":"<<endl;
-         cout<<"dpl"<<endl;
-         if (son1 != NULL) son1->gencode("coder");
-         cout<<"equ"<<endl;
-         cout<<"fjp switch"+to_string(cur_switch)+"_case"+to_string(cur_case+1)<<endl;
-         LoopBreak::AddLastLabel("switch_end"+to_string(cur_switch));
-         case_num++;
-         if (son2 != NULL) son2->gencode("coder");
+        int cur_switch = switch_num;
+        int cur_case = case_num;
+        cout << "switch" + to_string(cur_switch) + "_case" + to_string(cur_case) + ":" << endl;
+        cout << "dpl" << endl;
+        if (son1 != NULL) son1->gencode("coder");
+        cout << "equ" << endl;
+        cout << "fjp switch" + to_string(cur_switch) + "_case" + to_string(cur_case + 1) << endl;
+        LoopBreak::AddLastLabel("switch_end" + to_string(cur_switch));
+        case_num++;
+        if (son2 != NULL) son2->gencode("coder");
     }
 
 };
 
-class StructPtr {
-    treenode *decl_node;
-    string name;
-
-    string getNameInternal(treenode *curr) {
-        if (name.empty()) {
-            if (!curr) {
-                return "";
-            }
-            if (curr && !curr->rnode)
-                return reinterpret_cast<leafnode *>(curr)->data.sval->str;
-            return getNameInternal(curr->rnode);
-        }
-        return name;
-    }
-
-public:
-
-    StructPtr(treenode *decl_node) : decl_node(decl_node) {
-        treenode *curr = decl_node;
-        name = getNameInternal(curr);
-    }
-};
 
 class StructDot : public TreeNode {
-    string struct_name;
-    string field;
+    string left_field;
+    string right_field;
+
+    string get_field() const { return dynamic_cast<StructDot *>(son1)->right_field; }
+
 public:
-    StructDot(const string &struct_name, const string &field) : struct_name(struct_name), field(field) {}
+
+    StructDot(const string &l_field, const string &r_field, treenode *lnode = nullptr) : TreeNode(obj_tree(lnode),
+                                                                                                  nullptr),
+                                                                                         left_field(""),
+                                                                                         right_field(r_field) {
+        if (!l_field.empty()) {
+            this->left_field = l_field;
+        }
+    }
 
     void gencode(string c_type) override {
-        const Variable *strct = ST.find(struct_name);
+        if (son1 != nullptr) son1->gencode(c_type);
+
+        Variable *strct = const_cast<Variable *>(ST.find(left_field));    // instance
+
+//        if (son1){
+//            const StructDef& field_def = ST.get_struct_definition(get_field());
+//            list<Variable> field of fields
+//        }
+
         int abs_address = strct->getAddress();
-        string struct_type = strct->getType();
-        const StructDef &definition = ST.get_struct_definition(struct_type);
-        list<Variable> fields = definition.get_fields();
-        cout << "ldc " << abs_address << endl;
+        string struct_type = strct->getType();  // struct S
+
+        const StructDef &s_def = ST.get_struct_definition(struct_type);
+        list<Variable> fields = s_def.get_fields();
+
+        if (!son1)
+            cout << "ldc " << abs_address << endl;  // address of instance
+
         int rel_address = 0;
-        for (const auto _field: fields) {
-            if (this->field == _field.getIdentifier())
+        for (const auto &_field: fields) {
+            if (right_field == _field.getIdentifier())
                 break;
             rel_address += _field.getSize();
         }
+
         cout << "inc " << rel_address << endl;
         if (c_type == "coder") {
             cout << "ind" << endl;
@@ -983,30 +1062,13 @@ public:
     }
 };
 
-class StructArrow : public TreeNode {
-    string struct_name;
-    string field;
+class PtrDeref : public TreeNode {
 public:
-    StructArrow(const string &struct_name, const string &field) : struct_name(struct_name), field(field) {}
+    explicit PtrDeref(treenode *rnode) : TreeNode(nullptr, obj_tree(rnode)) {}
 
     void gencode(string c_type) override {
-        const Variable *strct = ST.find(struct_name);
-        int abs_address = strct->getAddress();
-        string struct_type = strct->getType();
-        const StructDef &definition = ST.get_struct_definition(struct_type);
-        list<Variable> fields = definition.get_fields();
-        cout << "ldc " << abs_address << endl;
+        son2->gencode(c_type);
         cout << "ind" << endl;
-        int rel_address = 0;
-        for (const auto _field: fields) {
-            if (this->field == _field.getIdentifier())
-                break;
-            rel_address += _field.getSize();
-        }
-        cout << "inc " << rel_address << endl;
-        if (c_type == "coder") {
-            cout << "ind" << endl;
-        }
     }
 };
 
@@ -1274,29 +1336,20 @@ TreeNode *obj_tree(treenode *root) {
                     string var_type, var_name;
                     int num_of_stars = 0;
 
-                    if (root->hdr.type == TN_COMP_DECL) { // struct decl
-                        if (root->rnode->hdr.type == TN_DECL) {  // pointer to struct
-
-//                            StructPtr *a = new StructPtr(root,);
-//                            ST.insert(a);
-                        } else { // struct
-
-                        }
-                    }
                     // var type
                     if (root->lnode->hdr.type == TN_TYPE_LIST) {
                         var_type = toksym(((leafnode *) root->lnode->lnode)->hdr.tok, 0);
                     }
 
-
-                    if (var_type == "struct") {
-                        if (root->lnode->lnode->hdr.type == TN_OBJ_REF) { // Instantiation.
-                            string struct_type = reinterpret_cast<leafnode *>(root->lnode->lnode->lnode)->data.sval->str;
-                            var_type += " " + struct_type;
-                        } else { // Definition.
-                            return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
-                        }
+                    // if its a struct decl/instantiation and NOT a pointer to a struct.
+                    if (var_type == "struct" && root->lnode->lnode->hdr.type == TN_OBJ_REF) {
+                        // Instantiation.
+                        string struct_type = reinterpret_cast<leafnode *>(root->lnode->lnode->lnode)->data.sval->str;
+                        var_type += " " + struct_type;
+                    } else if (var_type == "struct" && root->lnode->lnode->hdr.type == TN_OBJ_DEF) { // Definition.
+                        return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                     }
+
 
                     tn_t rn_type = root->rnode->hdr.type;
                     if (rn_type == TN_DECL) { // this is a pointer declaration.
@@ -1319,13 +1372,15 @@ TreeNode *obj_tree(treenode *root) {
                     // Now we got all var info...
                     if (!var_name.empty() and !var_type.empty()) {
                         // adding to symbol table.
+                        string final_type = ST.CalcType(var_type, num_of_stars);
+                        int var_size = ST.CalcSize(final_type);
                         if (StructDef::is_in_progress()) {
-                            ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Struct_Stack_Address++,
-                                      ST.CalcSize(var_type));
+                            ST.insert(var_name, final_type, Struct_Stack_Address, var_size);
+                            Struct_Stack_Address += var_size;
                         } else {
-                            int var_size = ST.CalcSize(var_type);
-                            ST.insert(var_name, ST.CalcType(var_type, num_of_stars), Stack_Address,
-                                      var_size);
+                            const StructDef &s_def = ST.get_struct_definition(var_type);
+                            list<Variable> fields = s_def.get_fields();
+                            ST.insert(var_name, final_type, Stack_Address, var_size, Dims(), fields);
                             Stack_Address += var_size;
                         }
 
@@ -1400,7 +1455,15 @@ TreeNode *obj_tree(treenode *root) {
                         // Give the struct a name.
                         string struct_name(reinterpret_cast<leafnode *>(root->lnode)->data.sval->str);
                         StructDef struct_definer(struct_name);
-                        StructDef::start();
+                        struct_definer.start();
+
+                        if (root->rnode->hdr.type == TN_COMP_DECL) { // Single field declaration, skip collector.
+                            build_tree_recur(root->rnode);
+                            struct_definer.add_field(ST.get_generated_fields().front(), true);
+                            ST.add_struct_definition(struct_definer);
+                            struct_definer.finish();
+                            return nullptr;
+                        }
 
                         // Collect (field) component nodes.
                         StructFieldCollector collector(root->rnode);
@@ -1416,9 +1479,9 @@ TreeNode *obj_tree(treenode *root) {
                         }
 
                         // symbol table already clears sfg...
+                        struct_definer.finish();
                         ST.add_struct_definition(struct_definer);
 
-                        StructDef::finish();
                         return nullptr;
                     } else  // enums or something else don't matter...
                         return nullptr;
@@ -1473,7 +1536,19 @@ TreeNode *obj_tree(treenode *root) {
                     ArrayIndexCollector ICollector(root);
                     OrderedNodes nodes = ICollector.get_ordered_nodes();
                     string var_name = ICollector.get_var_name();
-                    return new Id(var_name, nodes);
+                    regex re(R"(\.|->)");   // '.' or '->' tokens.
+                    vector<string> tokenized = tokenize(var_name, re);
+                    if (tokenized.size() > 1) {
+                        for (int i = 0; i < tokenized.size() - 1; ++i) {
+                            string left(tokenized[i]),right(tokenized[i+1]);
+                            if(i==0){   // load address
+
+                            }
+                            //load offset
+                        }
+                    } else {
+                        return new Id(tokenized.back(), nodes);
+                    }
                 }
 
                 case TN_DEREF: {
@@ -1491,9 +1566,16 @@ TreeNode *obj_tree(treenode *root) {
                     } else {
                         /* Struct select case "." */
                         /* e.g. struct_variable.x; */
-                        string struct_name = reinterpret_cast<leafnode *>(root->lnode)->data.sval->str;
+                        node_type ln_t(root->lnode->hdr.which), rn_t(root->rnode->hdr.which);
+
                         string struct_field = reinterpret_cast<leafnode *>(root->rnode)->data.sval->str;
-                        return new StructDot(struct_name, struct_field);
+                        if (ln_t == LEAF_T && rn_t == LEAF_T) {
+                            string struct_name = reinterpret_cast<leafnode *>(root->lnode)->data.sval->str;
+                            return new StructDot(struct_name, struct_field, nullptr);
+                        } else {
+                            return new StructDot("", struct_field, root->lnode);
+                        }
+
                     }
                     break;
                 }
