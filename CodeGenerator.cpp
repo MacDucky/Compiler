@@ -849,21 +849,20 @@ class Index : public TreeNode {
     int size_of_basic;
     OrderedDims *current_dims;
     int _dim_ptr;
+    string arr_name;
 public:
-    Index() : size_of_basic(0), current_dims(nullptr), _dim_ptr(-1) {
-        if (!current_dims) {
-            _dim_ptr = -1;
-        } else {
-            _dim_ptr = 1;
-        }
-    }
+    Index() : size_of_basic(0), current_dims(nullptr), _dim_ptr(-1) {}
 
     void gencode(string c_type) override {
         son1->gencode("codel");
         son2->gencode("coder");
-        if (size_of_basic == 0) {
-            cout << "Size was not defined!" << endl;
-            exit(-1);
+        Index *left_node = dynamic_cast<Index *>(son1);
+        if (left_node) {
+            // pass its data here...
+            size_of_basic = left_node->size_of_basic;
+            current_dims = left_node->current_dims;
+            _dim_ptr = left_node->_dim_ptr;
+            arr_name = left_node->arr_name;
         }
         if (_dim_ptr == -1) {
             cout << "ixa " << size_of_basic << endl;
@@ -879,12 +878,24 @@ public:
             cout << "ind" << endl;
     }
 
+    void setDimPtr(int dimPtr) {
+        _dim_ptr = dimPtr;
+    }
+
     void setSizeOfBasic(int sizeOfBasic) {
         size_of_basic = sizeOfBasic;
     }
 
     void setCurrentDims(OrderedDims *currentDims) {
         current_dims = currentDims;
+    }
+
+    const string &getArrName() const {
+        return arr_name;
+    }
+
+    void setArrName(const string &arrName) {
+        arr_name = arrName;
     }
 
 };
@@ -1008,6 +1019,7 @@ public:
     virtual void gencode(string c_type) {
         if (son1 != NULL) son1->gencode("coder");
         if (son2 != NULL) son2->gencode("coder");
+        cout << "switch" + to_string(switch_num) + "_case" + to_string(case_num) + ":" << endl;
         cout << "switch_end" + to_string(switch_num) + ":" << endl;
         LoopBreak::RemoveLastLabel();
         switch_num++;
@@ -1061,7 +1073,18 @@ public:
             left_field = dynamic_cast<Id *>(son1)->getIdName();
             right_field = dynamic_cast<Id *>(son2)->getIdName();
         } else {
-            left_field = dynamic_cast<Id *>(get_rightest(son1))->getIdName();
+            Id *l_id = dynamic_cast<Id *>(get_rightest(son1));
+            if (l_id)
+                left_field = dynamic_cast<Id *>(get_rightest(son1))->getIdName();
+            else {   // this is an array of structs.
+                Index *arr_index = dynamic_cast<Index *>(son1);
+                if (arr_index) {
+                    left_field = arr_index->getArrName();
+                } else {
+                    cout << "StructDot::gencode() error occured!" << endl;
+                    exit(-1);
+                }
+            }
             right_field = dynamic_cast<Id *>(son2)->getIdName();
         }
 
@@ -1377,7 +1400,8 @@ TreeNode *obj_tree(treenode *root) {
                 }
 
                 case TN_COMP_DECL:  // same as regular decl
-                case TN_DECL: {   /* structs declaration - for HW2 */
+                case TN_DECL: {/* structs declaration - for HW2 */
+                    bool is_struct = false;
                     string var_type, var_name;
                     int num_of_stars = 0;
 
@@ -1391,6 +1415,7 @@ TreeNode *obj_tree(treenode *root) {
                         // Instantiation.
                         string struct_type = reinterpret_cast<leafnode *>(root->lnode->lnode->lnode)->data.sval->str;
                         var_type += " " + struct_type;
+                        is_struct = true;
                     } else if (var_type == "struct" && root->lnode->lnode->hdr.type == TN_OBJ_DEF) { // Definition.
                         return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
                     }
@@ -1423,8 +1448,11 @@ TreeNode *obj_tree(treenode *root) {
                             ST.insert(var_name, final_type, Struct_Stack_Address, var_size);
                             Struct_Stack_Address += var_size;
                         } else {
-                            const StructDef &s_def = ST.get_struct_definition(var_type);
-                            list<Variable> fields = s_def.get_fields();
+                            list<Variable> fields;
+                            if (is_struct) {
+                                const StructDef &s_def = ST.get_struct_definition(var_type);
+                                fields = s_def.get_fields();
+                            }
                             ST.insert(var_name, final_type, Stack_Address, var_size, Dims(), fields);
                             Stack_Address += var_size;
                         }
@@ -1586,6 +1614,9 @@ TreeNode *obj_tree(treenode *root) {
                             const OrderedDims &dims = var->getOrderedDims();
                             index->setCurrentDims(const_cast<OrderedDims *>(&dims));
                             index->setSizeOfBasic(ST.CalcSize(type));
+                            index->setArrName(name);
+                            if (dims.size() > 1)
+                                index->setDimPtr(1);
                         }
                     } else if (root->lnode->hdr.type == TN_DEREF) { // just a pointer
                         index->setCurrentDims(nullptr);
