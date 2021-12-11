@@ -130,6 +130,13 @@ public:
         return fields;
     }
 
+    void setFields(list<Variable> _fields) {
+        fields.clear();
+        for (auto &field: _fields) {
+            fields.push_back(field);
+        }
+    }
+
     friend class SymbolTable;
 };
 
@@ -151,7 +158,7 @@ public:
     void add_field(const Variable &field, bool single_field = false) {
         const string &identifier(field.getIdentifier()), &type(field.getType());
         int f_size(field.getSize());
-        fields.emplace_back(identifier, type, curr_rel_address, f_size, field.getOrderedDims());
+        fields.emplace_back(identifier, type, curr_rel_address, f_size, field.getOrderedDims(),false,field.get_fields_rel());
         curr_rel_address += field.getSize();
         if (single_field)
             size = curr_rel_address;
@@ -438,6 +445,20 @@ public:
 
 SymbolTable ST;
 
+
+list<Variable> add_struct_subfields(Variable v) {
+    string type = v.getType();
+    const StructDef& s_def = ST.get_struct_definition(type);
+
+    list<Variable> fields = Variable::get_fields(v.getAddress(), s_def.get_fields());
+    for (auto &field: fields) {
+        if (field.getType().find("struct") != string::npos) {
+            field.setFields(add_struct_subfields(field));
+        }
+    }
+    return fields;
+}
+
 class TreeNode { //base class
 public:
     /*you can add another son nodes */
@@ -552,7 +573,11 @@ public:
         collect();  // collect dimensions + name.
         int size = ST.CalcSize(type, dims);
         int &address = StructDef::is_in_progress() ? Struct_Stack_Address : Stack_Address;
-        ST.insert(name, type, address, size, dims);
+        list<Variable> fields;
+        if (type.find("struct") != string::npos) {
+            fields = ST.get_struct_definition(type).get_fields();
+        }
+        ST.insert(name, type, address, size, dims, fields);
         address += size;
     }
 
@@ -867,7 +892,13 @@ public:
         if (_dim_ptr == -1) {
             cout << "ixa " << size_of_basic << endl;
         } else {
-            cout << "ixa " << (*current_dims)[_dim_ptr] * size_of_basic << endl;
+            int dims_mul = (*current_dims)[_dim_ptr];
+            if (_dim_ptr + 1 != current_dims->size()) {
+                for (int i = _dim_ptr + 1; i < current_dims->size(); ++i) {
+                    dims_mul *= (*current_dims)[i];
+                }
+            }
+            cout << "ixa " << dims_mul * size_of_basic << endl;
             if ((*current_dims).size() - 1 == _dim_ptr) {
                 _dim_ptr = -1;
             } else {
@@ -1065,6 +1096,7 @@ public:
     StructDot(treenode *root) : TreeNode(obj_tree(root->lnode), obj_tree(root->rnode)) {}
 
     void gencode(string c_type) override {
+        static Variable *strct;
         static bool to_delete = false;
 
         if (son1 != nullptr) son1->gencode("codel");
@@ -1088,13 +1120,15 @@ public:
             right_field = dynamic_cast<Id *>(son2)->getIdName();
         }
 
-        static Variable *strct = const_cast<Variable *>(ST.find(left_field));    // instance
+
 
         if (to_delete) {
             delete strct;
             strct = nullptr;
             to_delete = false;
         }
+        strct = const_cast<Variable *>(ST.find(left_field));    // instance
+
 
 
         if (strct) {
@@ -1532,7 +1566,11 @@ TreeNode *obj_tree(treenode *root) {
 
                         if (root->rnode->hdr.type == TN_COMP_DECL) { // Single field declaration, skip collector.
                             build_tree_recur(root->rnode);
-                            struct_definer.add_field(ST.get_generated_fields().front(), true);
+                            Variable field = ST.get_generated_fields().front();
+                            if (field.getType().find("struct") != string::npos) {
+                                field.setFields(add_struct_subfields(field));
+                            }
+                            struct_definer.add_field(field, true);
                             ST.add_struct_definition(struct_definer);
                             struct_definer.finish();
                             return nullptr;
@@ -1548,6 +1586,9 @@ TreeNode *obj_tree(treenode *root) {
 
                         list<Variable> fields = ST.get_generated_fields();
                         for (auto &field: fields) {
+                            if (field.getType().find("struct") != string::npos) {
+                                field.setFields(add_struct_subfields(field));
+                            }
                             struct_definer.add_field(field);
                         }
 
