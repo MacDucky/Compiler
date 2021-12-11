@@ -158,7 +158,8 @@ public:
     void add_field(const Variable &field, bool single_field = false) {
         const string &identifier(field.getIdentifier()), &type(field.getType());
         int f_size(field.getSize());
-        fields.emplace_back(identifier, type, curr_rel_address, f_size, field.getOrderedDims(),false,field.get_fields_rel());
+        fields.emplace_back(identifier, type, curr_rel_address, f_size, field.getOrderedDims(), false,
+                            field.get_fields_rel());
         curr_rel_address += field.getSize();
         if (single_field)
             size = curr_rel_address;
@@ -223,6 +224,7 @@ public:
     void add_definition(const StructDef &struct_def) { struct_defs.push_back(struct_def); }
 
     const StructDef &find_def(const string &strct_type) const {
+
         for (const auto &def: struct_defs) {
             if (strct_type.find(def.get_name()) != string::npos)
                 return def;
@@ -439,6 +441,15 @@ public:
     }
 
     const StructDef &get_struct_definition(string struct_type) const {
+//        auto remove_stars = [](const string &str, char c) {
+//            string result;
+//            for (size_t i = 0; i < str.size(); i++) {
+//                char currentChar = str[i];
+//                if (currentChar != c)
+//                    result += currentChar;
+//            }
+//            return result;
+//        };
         return sd.find_def(struct_type);
     }
 };
@@ -448,7 +459,10 @@ SymbolTable ST;
 
 list<Variable> add_struct_subfields(Variable v) {
     string type = v.getType();
-    const StructDef& s_def = ST.get_struct_definition(type);
+    if(type.find('*') != string::npos){ // pointer
+        return list<Variable>();
+    }
+    const StructDef &s_def = ST.get_struct_definition(type);
 
     list<Variable> fields = Variable::get_fields(v.getAddress(), s_def.get_fields());
     for (auto &field: fields) {
@@ -866,7 +880,7 @@ public:
     virtual void gencode(string c_type) {
         if (son1 != nullptr) son1->gencode("codel"); //return address
         if (son2 != nullptr) son2->gencode("coder"); // return value
-        cout << "sto " << endl;
+        cout << "sto" << endl;
     }
 };
 
@@ -1121,7 +1135,6 @@ public:
         }
 
 
-
         if (to_delete) {
             delete strct;
             strct = nullptr;
@@ -1136,6 +1149,7 @@ public:
             for (auto &f: fields) {
                 if (f.getIdentifier() == right_field) {
                     cur_left_type = new Variable(f);
+//                    to_delete = true;
                 }
             }
         } else {
