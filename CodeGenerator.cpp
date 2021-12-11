@@ -846,11 +846,11 @@ public:
 };
 
 class Index : public TreeNode {
-    static int size_of_basic;
-    static OrderedDims *current_dims;
+    int size_of_basic;
+    OrderedDims *current_dims;
     int _dim_ptr;
 public:
-    Index(treenode *lnode, treenode *rnode) : TreeNode(obj_tree(lnode), obj_tree(rnode)) {
+    Index() : size_of_basic(0), current_dims(nullptr), _dim_ptr(-1) {
         if (!current_dims) {
             _dim_ptr = -1;
         } else {
@@ -879,30 +879,28 @@ public:
             cout << "ind" << endl;
     }
 
-    static void setSizeOfBasic(int sizeOfBasic) {
+    void setSizeOfBasic(int sizeOfBasic) {
         size_of_basic = sizeOfBasic;
     }
 
-    static void setCurrentDims(OrderedDims *currentDims) {
+    void setCurrentDims(OrderedDims *currentDims) {
         current_dims = currentDims;
     }
 
 };
 
-int Index::size_of_basic = 0;
-OrderedDims *Index::current_dims = nullptr;
-
 
 class Id : public TreeNode {
     string id_name;
     OrderedNodes orderedNodes;
+    bool is_struct_field;
 
     const Variable *_var;
 
 public:
     static int num_of_derefs;
 
-    explicit Id(const string id_n) : id_name(id_n) {}
+    explicit Id(const string id_n) : id_name(id_n), is_struct_field(false) {}
 
     Id(const string id_n, const OrderedNodes &ordered_nodes) : id_name(id_n),
                                                                orderedNodes(ordered_nodes),
@@ -910,6 +908,7 @@ public:
 
     virtual void gencode(string c_type) {
         const Variable *var = ST.find(id_name);
+        bool is_array = ST.is_array(id_name);
         if (var == nullptr) {
             cout << "Variable was not declared!" << endl;
             exit(-1);
@@ -918,12 +917,20 @@ public:
             cout << "ldc " << var->getAddress() << endl;
         } else if (c_type == "coder") {
             cout << "ldc " << var->getAddress() << endl;
-            cout << "ind" << endl;
+            if (!is_array)
+                cout << "ind" << endl;
         }
         if (var->is_heap_allocd())
             delete var;
     }
 
+    const string &getIdName() const {
+        return id_name;
+    }
+
+    void setIsStructField(bool isStructField) {
+        is_struct_field = isStructField;
+    }
 };
 
 
@@ -1032,37 +1039,57 @@ class StructDot : public TreeNode {
     string left_field;
     string right_field;
 
-    string get_field() const { return dynamic_cast<StructDot *>(son1)->right_field; }
+    static Variable *cur_left_type;
+
+    TreeNode *get_rightest(TreeNode *node) {
+        while (node && node->son2) {
+            node = node->son2;
+        }
+        return node;
+    }
 
 public:
 
-    StructDot(const string &l_field, const string &r_field, treenode *lnode = nullptr) : TreeNode(obj_tree(lnode),
-                                                                                                  nullptr),
-                                                                                         left_field(""),
-                                                                                         right_field(r_field) {
-        if (!l_field.empty()) {
-            this->left_field = l_field;
-        }
-    }
+    StructDot(treenode *root) : TreeNode(obj_tree(root->lnode), obj_tree(root->rnode)) {}
 
     void gencode(string c_type) override {
-        if (son1 != nullptr) son1->gencode(c_type);
+        static bool to_delete = false;
 
-        Variable *strct = const_cast<Variable *>(ST.find(left_field));    // instance
+        if (son1 != nullptr) son1->gencode("codel");
 
-//        if (son1){
-//            const StructDef& field_def = ST.get_struct_definition(get_field());
-//            list<Variable> field of fields
-//        }
+        if (typeid(*son1) == typeid(*son2)) {    // s.a
+            left_field = dynamic_cast<Id *>(son1)->getIdName();
+            right_field = dynamic_cast<Id *>(son2)->getIdName();
+        } else {
+            left_field = dynamic_cast<Id *>(get_rightest(son1))->getIdName();
+            right_field = dynamic_cast<Id *>(son2)->getIdName();
+        }
 
-        int abs_address = strct->getAddress();
+        static Variable *strct = const_cast<Variable *>(ST.find(left_field));    // instance
+
+        if (to_delete) {
+            delete strct;
+            strct = nullptr;
+            to_delete = false;
+        }
+
+
+        if (strct) {
+            list<Variable> fields = Variable::get_fields(strct->getAddress(), strct->get_fields_rel());
+            for (auto &f: fields) {
+                if (f.getIdentifier() == right_field) {
+                    cur_left_type = new Variable(f);
+                }
+            }
+        } else {
+            // use curr_left_type to see its type.
+            strct = cur_left_type;
+            to_delete = true;   // since the variable is heap allocated and not being watched over.
+        }
+
         string struct_type = strct->getType();  // struct S
-
         const StructDef &s_def = ST.get_struct_definition(struct_type);
         list<Variable> fields = s_def.get_fields();
-
-        if (!son1)
-            cout << "ldc " << abs_address << endl;  // address of instance
 
         int rel_address = 0;
         for (const auto &_field: fields) {
@@ -1077,6 +1104,8 @@ public:
         }
     }
 };
+
+Variable *StructDot::cur_left_type = nullptr;
 
 class PtrDeref : public TreeNode {
 public:
@@ -1548,20 +1577,23 @@ TreeNode *obj_tree(treenode *root) {
 
                 case TN_INDEX: {
                     /* call for array - for HW2! */
+                    Index *index = new Index();
                     if (root->lnode->hdr.type == TN_IDENT) {  //array name
                         string name = reinterpret_cast<leafnode *>(root->lnode)->data.sval->str;
                         if (ST.is_array(name)) {
                             const Variable *var = ST.find(name);
                             string type = var->getType();
                             const OrderedDims &dims = var->getOrderedDims();
-                            Index::setCurrentDims(const_cast<OrderedDims *>(&dims));
-                            Index::setSizeOfBasic(ST.CalcSize(type));
+                            index->setCurrentDims(const_cast<OrderedDims *>(&dims));
+                            index->setSizeOfBasic(ST.CalcSize(type));
                         }
                     } else if (root->lnode->hdr.type == TN_DEREF) { // just a pointer
-                        Index::setCurrentDims(nullptr);
-                        Index::setSizeOfBasic(1);
+                        index->setCurrentDims(nullptr);
+                        index->setSizeOfBasic(1);
                     }
-                    return new Index(root->lnode, root->rnode);
+                    index->son1 = obj_tree(root->lnode);
+                    index->son2 = obj_tree(root->rnode);
+                    return index;
                 }
 
                 case TN_DEREF: {
@@ -1577,18 +1609,7 @@ TreeNode *obj_tree(treenode *root) {
                         obj_tree(root->lnode);
                         obj_tree(root->rnode);
                     } else {
-                        /* Struct select case "." */
-                        /* e.g. struct_variable.x; */
-                        node_type ln_t(root->lnode->hdr.which), rn_t(root->rnode->hdr.which);
-
-                        string struct_field = reinterpret_cast<leafnode *>(root->rnode)->data.sval->str;
-                        if (ln_t == LEAF_T && rn_t == LEAF_T) {
-                            string struct_name = reinterpret_cast<leafnode *>(root->lnode)->data.sval->str;
-                            return new StructDot(struct_name, struct_field, nullptr);
-                        } else {
-                            return new StructDot("", struct_field, root->lnode);
-                        }
-
+                        return new StructDot(root);
                     }
                     break;
                 }
