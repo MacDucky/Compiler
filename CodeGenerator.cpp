@@ -459,7 +459,7 @@ SymbolTable ST;
 
 list<Variable> add_struct_subfields(Variable v) {
     string type = v.getType();
-    if(type.find('*') != string::npos){ // pointer
+    if (type.find('*') != string::npos) { // pointer
         return list<Variable>();
     }
     const StructDef &s_def = ST.get_struct_definition(type);
@@ -496,6 +496,12 @@ public:
 
 /*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
 TreeNode *obj_tree(treenode *root);
+
+bool is_constant(TreeNode *expr);
+
+bool is_zero_expr(TreeNode *expr);
+
+double calculate_value(TreeNode *expr);
 
 /*
  * Generic class to have the option to collect according to tree structure.
@@ -640,13 +646,17 @@ public:
     string get_var_name() const { return name; }
 };
 
+static bool switch_is_const = false;
+static double switch_value = -1;
 
 class LoopBreak : public TreeNode {
     static MyStack<string> label_refs;
 public:
     void gencode(string c_type) override {
-        const string &last_label = label_refs.top();
-        cout << "ujp " << last_label << std::endl;
+        if (!switch_is_const) {
+            const string &last_label = label_refs.top();
+            cout << "ujp " << last_label << std::endl;
+        }
     }
 
     static void AddLastLabel(const string &end_label) {
@@ -763,12 +773,13 @@ public:
 int DoWhile::_dowhile_loop_label_idx = 0;
 
 class If : public TreeNode {
-    TreeNode *_else_do;
 
     static int _if_end_label_idx;
     static int _ifelse_else_label_idx;
     static int _ifelse_end_label_idx;
 public:
+    TreeNode *_else_do;
+
     If(treenode *cond, treenode *thenDo, treenode *elseDo = nullptr) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
                                                                        _else_do(obj_tree(elseDo)) {}
 
@@ -780,24 +791,38 @@ public:
 
         if (!_else_do) {// simple if case.
             if (son1 && son2) {
-                son1->gencode("coder");
-                const string &ifend_label("if_end" + to_string(_if_end_label_idx++));
-                cout << "fjp " + ifend_label << endl;
-                son2->gencode("coder");
-                cout << ifend_label + ":" << endl;
+                if (is_constant(son1)) {
+                    if (calculate_value(son1)) {
+                        son2->gencode("coder");
+                    }
+                } else {
+                    son1->gencode("coder");
+                    const string &ifend_label("if_end" + to_string(_if_end_label_idx++));
+                    cout << "fjp " + ifend_label << endl;
+                    son2->gencode("coder");
+                    cout << ifend_label + ":" << endl;
+                }
             } else {
                 throw "something wrong with AST node to TreeNode conversion.\n";
             }
         } else {// if else case.
-            son1->gencode("coder");
-            const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label_idx++));
-            const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label_idx++));
-            cout << "fjp " + ifelse_else_label << endl;
-            son2->gencode("coder");
-            cout << "ujp " + ifelse_end_label << endl;
-            cout << ifelse_else_label + ":" << endl;
-            _else_do->gencode("coder");
-            cout << ifelse_end_label + ":" << endl;
+            if (is_constant(son1)) {
+                if (is_zero_expr(son1)) {
+                    _else_do->gencode("coder");
+                } else {
+                    son2->gencode("coder");
+                }
+            } else {
+                son1->gencode("coder");
+                const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label_idx++));
+                const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label_idx++));
+                cout << "fjp " + ifelse_else_label << endl;
+                son2->gencode("coder");
+                cout << "ujp " + ifelse_end_label << endl;
+                cout << ifelse_else_label + ":" << endl;
+                _else_do->gencode("coder");
+                cout << ifelse_end_label + ":" << endl;
+            }
         }
     }
 };
@@ -808,11 +833,11 @@ int If::_ifelse_end_label_idx = 0;
 
 
 class Ternary : public TreeNode {
-    TreeNode *_else_ret;
-
     static int _cond_else_idx;
     static int _condLabel_end_idx;
 public:
+    TreeNode *_else_ret;
+
     Ternary(treenode *cond, treenode *then_ret, treenode *otherwise_ret) : TreeNode(obj_tree(cond),
                                                                                     obj_tree(then_ret)),
                                                                            _else_ret(obj_tree(otherwise_ret)) {}
@@ -822,15 +847,23 @@ public:
     }
 
     void gencode(string c_type) override {
-        son1->gencode("coder");     // cond check
         const string &cond_else_label("cond_else" + to_string(_cond_else_idx++));
         const string &cond_end_label("condLabel_end" + to_string(_condLabel_end_idx++));
-        cout << "fjp " + cond_else_label << endl;
-        son2->gencode("coder");     // then return expr
-        cout << "ujp " + cond_end_label << endl;
-        cout << cond_else_label + ":" << endl;  // otherwise return expr
-        _else_ret->gencode("coder");
-        cout << cond_end_label + ":" << endl;
+        if (is_constant(son1)) {
+            if (calculate_value(son1)) {
+                son2->gencode("coder");
+            } else {
+                _else_ret->gencode("coder");
+            }
+        } else {
+            son1->gencode("coder");     // cond check
+            cout << "fjp " + cond_else_label << endl;
+            son2->gencode("coder");     // then return expr
+            cout << "ujp " + cond_end_label << endl;
+            cout << cond_else_label + ":" << endl;  // otherwise return expr
+            _else_ret->gencode("coder");
+            cout << cond_end_label + ":" << endl;
+        }
     }
 };
 
@@ -848,6 +881,8 @@ public:
         son1 = obj_tree(left);
         son2 = obj_tree(right);
     }
+
+    const string &get_op() const { return _op; }
 
     void gencode(string c_type) override {
         if (!son1 && son2) { //only case is when its ' -x '
@@ -997,6 +1032,8 @@ public:
 
     explicit Num(int number) : TreeNode(), value(number) {}
 
+    explicit operator int() const { return value; }
+
     virtual void gencode(string c_type) {
         cout << "ldc " << getValue() << endl;
     }
@@ -1008,6 +1045,8 @@ public:
     RealNum(double value) : TreeNode(), value(value) {}
 
     double getValue() const { return value; }
+
+    explicit operator double() const { return value; }
 
     virtual void gencode(string c_type) {
         cout << fixed;
@@ -1059,36 +1098,50 @@ static int switch_num = 0;
 static int case_num = 0;
 
 class SwitchCond : public TreeNode {
-
 public:
-    virtual void gencode(string c_type) {
-        if (son1 != NULL) son1->gencode("coder");
-        if (son2 != NULL) son2->gencode("coder");
-        cout << "switch" + to_string(switch_num) + "_case" + to_string(case_num) + ":" << endl;
-        cout << "switch_end" + to_string(switch_num) + ":" << endl;
-        LoopBreak::RemoveLastLabel();
-        switch_num++;
-        case_num = 0;
-    }
 
+    virtual void gencode(string c_type) {
+        if (is_constant(son1)) {
+            switch_is_const = true;
+            switch_value = calculate_value(son1);
+            son2->gencode("coder");
+            switch_is_const = false;
+        } else {
+            if (son1 != NULL) son1->gencode("coder");
+            if (son2 != NULL) son2->gencode("coder");
+            cout << "switch" + to_string(switch_num) + "_case" + to_string(case_num) + ":" << endl;
+            cout << "switch_end" + to_string(switch_num) + ":" << endl;
+            LoopBreak::RemoveLastLabel();
+            switch_num++;
+            case_num = 0;
+        }
+    }
 };
 
 class SwitchLabel : public TreeNode {
-
+//    double case_val;
 public:
-    virtual void gencode(string c_type) {
-        int cur_switch = switch_num;
-        int cur_case = case_num;
-        cout << "switch" + to_string(cur_switch) + "_case" + to_string(cur_case) + ":" << endl;
-        cout << "dpl" << endl;
-        if (son1 != NULL) son1->gencode("coder");
-        cout << "equ" << endl;
-        cout << "fjp switch" + to_string(cur_switch) + "_case" + to_string(cur_case + 1) << endl;
-        LoopBreak::AddLastLabel("switch_end" + to_string(cur_switch));
-        case_num++;
-        if (son2 != NULL) son2->gencode("coder");
-    }
+//    SwitchLabel(double val) : case_val(val) {}
 
+    virtual void gencode(string c_type) {
+        if (switch_is_const) {
+            double case_val = calculate_value(son1);
+            if (case_val == switch_value) {
+                son2->gencode();
+            }
+        } else {
+            int cur_switch = switch_num;
+            int cur_case = case_num;
+            cout << "switch" + to_string(cur_switch) + "_case" + to_string(cur_case) + ":" << endl;
+            cout << "dpl" << endl;
+            if (son1 != NULL) son1->gencode("coder");
+            cout << "equ" << endl;
+            cout << "fjp switch" + to_string(cur_switch) + "_case" + to_string(cur_case + 1) << endl;
+            LoopBreak::AddLastLabel("switch_end" + to_string(cur_switch));
+            case_num++;
+            if (son2 != NULL) son2->gencode("coder");
+        }
+    }
 };
 
 
@@ -1187,6 +1240,170 @@ public:
         cout << "ind" << endl;
     }
 };
+
+double calculate_value(TreeNode *expr) {
+    if (!expr) {
+        return false;
+    }
+
+    const type_info &node_t = typeid(*expr);
+
+    if (is_zero_expr(expr)) {
+        return false;
+    }
+
+    if (node_t == typeid(Ternary)) {
+        Ternary *ternary = static_cast<Ternary *>(expr);
+        if (is_constant(ternary->son1)) {
+            if (is_zero_expr(ternary->son1)) {
+                return calculate_value(ternary->_else_ret);
+            } else {
+                return calculate_value(ternary->son2);
+            }
+        }
+        return 0;
+    }
+
+    if (node_t == typeid(Num))
+        return int(*static_cast<Num *>(expr));
+    if (node_t == typeid(RealNum))
+        return double(*static_cast<RealNum *>(expr));
+
+    if (node_t == typeid(BinOp) && static_cast<BinOp *>(expr)->get_op() == "neg")
+        return -calculate_value(expr->son2);
+
+    if (node_t == typeid(Not))
+        return !calculate_value(expr->son2);
+
+    /* Assuming we covered all the weird cases that are not binary */
+    double left_res = calculate_value(expr->son1);
+    double right_res = calculate_value(expr->son2);
+
+    if (node_t == typeid(BinOp)) {
+        BinOp *operation = static_cast<BinOp *>(expr);
+        const string &op = operation->get_op();
+        if (op == "add") {
+            return left_res + right_res;
+        } else if (op == "sub") {
+            return left_res - right_res;
+        } else if (op == "mul") {
+            return left_res * right_res;
+        } else if (op == "div") {
+            return left_res / right_res;
+        } else if (op == "and") {
+            return left_res && right_res;
+        } else if (op == "or") {
+            return left_res || right_res;
+        } else if (op == "grt") {
+            return left_res > right_res;
+        } else if (op == "les") {
+            return left_res < right_res;
+        } else if (op == "geq") {
+            return left_res >= right_res;
+        } else if (op == "leq") {
+            return left_res <= right_res;
+        } else if (op == "equ") {
+            return left_res == right_res;
+        } else if (op == "neq") {
+            return left_res != right_res;
+        }
+    }
+    cout << "Mishandled " << __FUNCTION__ << " case" << endl;
+    return false;
+}
+
+bool is_zero_expr(TreeNode *expr) {
+    const type_info &node_t = typeid(*expr);
+
+    /* Handling leaf cases. */
+    if (node_t == typeid(Num)) {
+        if (int(*static_cast<Num *>(expr)) == 0) {
+            return true;
+        }
+        return false;
+    }
+    if (node_t == typeid(RealNum)) {
+        if (double(*static_cast<RealNum *>(expr)) == 0) {
+            return true;
+        }
+        return false;
+    }
+    if (node_t == typeid(Id))
+        return false;
+
+    if (node_t == typeid(Not) || (node_t == typeid(BinOp) && static_cast<BinOp *>(expr)->get_op() == "neg"))
+        return !is_zero_expr(expr->son2);
+
+    if (!is_constant(expr->son1) || !is_constant(expr->son2)) {
+        return false;
+    }
+
+    if (node_t == typeid(Ternary)) {
+        Ternary *ternary = static_cast<Ternary *>(expr);
+        return !(calculate_value(ternary->son1) ? calculate_value(ternary->son2) : calculate_value(ternary->_else_ret));
+    }
+
+    if (node_t == typeid(BinOp)) {
+        BinOp *operation = static_cast<BinOp *>(expr);
+        const string &op = operation->get_op();
+        if (op == "mul" || op == "and") {
+            return is_zero_expr(operation->son1) || is_zero_expr(operation->son2);
+        } else if (op == "div") {
+            return is_zero_expr(operation->son1);
+        } else if (op == "add" || op == "or") {
+            return is_zero_expr(operation->son1) && is_zero_expr(operation->son2);
+        } else if (op == "sub" || op == "neq") {
+            return calculate_value(operation->son1) == calculate_value(operation->son2);
+        } else if (op == "grt") {
+            return calculate_value(operation->son1) <= calculate_value(operation->son2);
+        } else if (op == "les") {
+            return calculate_value(operation->son1) >= calculate_value(operation->son2);
+        } else if (op == "geq") {
+            return calculate_value(operation->son1) < calculate_value(operation->son2);
+        } else if (op == "leq") {
+            return calculate_value(operation->son1) > calculate_value(operation->son2);
+        } else if (op == "equ") {
+            return calculate_value(operation->son1) != calculate_value(operation->son2);
+        } else if (op == "neg") {
+            return is_zero_expr(operation->son2);
+        }
+    }
+    cout << "Mishandled " << __FUNCTION__ << " case" << endl;
+    return false;
+}
+
+bool is_constant(TreeNode *expr) {
+    const type_info &node_t = typeid(*expr);
+
+    if_node *constantNode = (if_node *) expr;
+    if (node_t == typeid(xxOp) || node_t == typeid(Opxx)) {
+        return false;
+    }
+    if (is_zero_expr(expr)) {
+        return true;
+    }
+
+    if (node_t == typeid(Id))
+        return false;
+
+    if (node_t == typeid(RealNum) || node_t == typeid(Num))
+        return true;
+
+    if (node_t == typeid(Ternary)) {
+        if (is_constant(
+                static_cast<Ternary *>(expr)->son1)) { //check if the condition expr is a const value
+            if (is_zero_expr(
+                    static_cast<Ternary *>(expr)->son1)) { //check if thr consdition expr is equal to 0
+                return is_constant(
+                        static_cast<Ternary *>(expr)->_else_ret); //check if the else is const expresion
+            } else {
+                return is_constant(static_cast<Ternary *>(expr)->son2);
+            }
+        }
+        return false;
+    }
+    return is_constant(expr->son1) && is_constant(expr->son2);
+}
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
@@ -1302,9 +1519,10 @@ TreeNode *obj_tree(treenode *root) {
                         return new If(ifn->cond, ifn->then_n, ifn->else_n);
                     }
 
-                case TN_COND_EXPR:
+                case TN_COND_EXPR: {
                     /* (cond)?(exp):(exp); */
                     return new Ternary(ifn->cond, ifn->then_n, ifn->else_n);
+                }
 
                 default:
                     /* Maybe you will use it later */
@@ -1866,6 +2084,7 @@ TreeNode *obj_tree(treenode *root) {
                     switch_label->son1 = obj_tree(root->lnode);
                     switch_label->son2 = obj_tree(root->rnode);
                     return switch_label;
+
                 }
 
                 default: {
