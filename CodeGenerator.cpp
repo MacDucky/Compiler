@@ -787,24 +787,39 @@ public:
 
         if (!_else_do) {// simple if case.
             if (son1 && son2) {
-                son1->gencode("coder");
-                const string &ifend_label("if_end" + to_string(_if_end_label_idx++));
-                cout << "fjp " + ifend_label << endl;
-                son2->gencode("coder");
-                cout << ifend_label + ":" << endl;
+                if (is_constant(son1)) {
+                    if (calculate_value(son1)) {
+                        son2->gencode("coder");
+                    }
+                }else{
+                    son1->gencode("coder");
+                    const string &ifend_label("if_end" + to_string(_if_end_label_idx++));
+                    cout << "fjp " + ifend_label << endl;
+                    son2->gencode("coder");
+                    cout << ifend_label + ":" << endl;
+                }
             } else {
                 throw "something wrong with AST node to TreeNode conversion.\n";
             }
         } else {// if else case.
-            son1->gencode("coder");
-            const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label_idx++));
-            const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label_idx++));
-            cout << "fjp " + ifelse_else_label << endl;
-            son2->gencode("coder");
-            cout << "ujp " + ifelse_end_label << endl;
-            cout << ifelse_else_label + ":" << endl;
-            _else_do->gencode("coder");
-            cout << ifelse_end_label + ":" << endl;
+            if (is_constant(son1)) {
+                if (is_zero_expr(son1)) {
+                    _else_do->gencode("coder");
+                }
+                else {
+                    son2->gencode("coder");
+                }
+            }else{
+                son1->gencode("coder");
+                const string &ifelse_else_label("ifelse_else" + to_string(_ifelse_else_label_idx++));
+                const string &ifelse_end_label("ifelse_end" + to_string(_ifelse_end_label_idx++));
+                cout << "fjp " + ifelse_else_label << endl;
+                son2->gencode("coder");
+                cout << "ujp " + ifelse_end_label << endl;
+                cout << ifelse_else_label + ":" << endl;
+                _else_do->gencode("coder");
+                cout << ifelse_end_label + ":" << endl;
+            }
         }
     }
 };
