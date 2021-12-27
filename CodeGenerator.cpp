@@ -938,9 +938,18 @@ public:
     explicit AssignBinOp(const string &op, treenode *lnode, treenode *rnode) : BinOp(op, lnode, rnode) {}
 
     void gencode(string c_type) override {
-        if (son1 != nullptr) son1->gencode("codel");
-        BinOp::gencode("");
-        cout << "sto" << endl;
+        if ((_op == "add" || _op == "sub") && is_constant(son2) && is_zero_expr(son2)) {
+            return;
+        } else if ((_op == "div" || _op == "mul") && is_constant(son2) && calculate_value(son2) == 1) {
+            return;
+        } else {
+            if (son1 != nullptr) son1->gencode("codel");
+            if (_op == "mul" && is_constant(son2) && is_zero_expr(son2)) {
+                cout << "ldc 0" << endl;
+            } else
+                BinOp::gencode("");
+            cout << "sto" << endl;
+        }
     }
 };
 
@@ -1414,7 +1423,7 @@ bool is_zero_expr(TreeNode *expr) {
 }
 
 bool is_constant(TreeNode *expr) {
-    if(!expr)
+    if (!expr)
         return false;
 
     const type_info &node_t = typeid(*expr);
