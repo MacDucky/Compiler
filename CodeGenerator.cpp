@@ -496,8 +496,11 @@ public:
 
 /*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
 TreeNode *obj_tree(treenode *root);
+
 bool is_constant(TreeNode *expr);
+
 bool is_zero_expr(TreeNode *expr);
+
 double calculate_value(TreeNode *expr);
 
 /*
@@ -826,15 +829,23 @@ public:
     }
 
     void gencode(string c_type) override {
-        son1->gencode("coder");     // cond check
         const string &cond_else_label("cond_else" + to_string(_cond_else_idx++));
         const string &cond_end_label("condLabel_end" + to_string(_condLabel_end_idx++));
-        cout << "fjp " + cond_else_label << endl;
-        son2->gencode("coder");     // then return expr
-        cout << "ujp " + cond_end_label << endl;
-        cout << cond_else_label + ":" << endl;  // otherwise return expr
-        _else_ret->gencode("coder");
-        cout << cond_end_label + ":" << endl;
+        if (is_constant(son1)) {
+            if (calculate_value(son1)) {
+                son2->gencode("coder");
+            } else {
+                _else_ret->gencode("coder");
+            }
+        } else {
+            son1->gencode("coder");     // cond check
+            cout << "fjp " + cond_else_label << endl;
+            son2->gencode("coder");     // then return expr
+            cout << "ujp " + cond_end_label << endl;
+            cout << cond_else_label + ":" << endl;  // otherwise return expr
+            _else_ret->gencode("coder");
+            cout << cond_end_label + ":" << endl;
+        }
     }
 };
 
@@ -1476,9 +1487,10 @@ TreeNode *obj_tree(treenode *root) {
                         return new If(ifn->cond, ifn->then_n, ifn->else_n);
                     }
 
-                case TN_COND_EXPR:
+                case TN_COND_EXPR: {
                     /* (cond)?(exp):(exp); */
                     return new Ternary(ifn->cond, ifn->then_n, ifn->else_n);
+                }
 
                 default:
                     /* Maybe you will use it later */
