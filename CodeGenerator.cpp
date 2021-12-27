@@ -921,7 +921,6 @@ public:
                 return;
             }
         }
-
         if (!son1 && son2) { //only case is when its ' -x '
             son2->gencode("coder");
             cout << "neg" << endl;
@@ -1369,8 +1368,12 @@ bool is_zero_expr(TreeNode *expr) {
     if (node_t == typeid(Id))
         return false;
 
-    if (node_t == typeid(Not) || (node_t == typeid(BinOp) && static_cast<BinOp *>(expr)->get_op() == "neg"))
+    if (node_t == typeid(Not))
         return !is_zero_expr(expr->son2);
+
+    if (node_t == typeid(BinOp) && static_cast<BinOp *>(expr)->get_op() == "sub" && !expr->son1) {
+        return calculate_value(expr->son2) == 0;
+    }
 
     if (!is_constant(expr->son1) || !is_constant(expr->son2)) {
         return false;
@@ -1411,9 +1414,11 @@ bool is_zero_expr(TreeNode *expr) {
 }
 
 bool is_constant(TreeNode *expr) {
+    if(!expr)
+        return false;
+
     const type_info &node_t = typeid(*expr);
 
-    if_node *constantNode = (if_node *) expr;
     if (node_t == typeid(xxOp) || node_t == typeid(Opxx)) {
         return false;
     }
