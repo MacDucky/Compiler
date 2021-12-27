@@ -883,6 +883,7 @@ public:
 
     void gencode(string c_type) override {
         if (is_constant(this)) {    // handles the unary ' - ' sign too.
+            cout << fixed << setprecision(6);   // eww but ok?
             cout << "ldc " << calculate_value(this) << endl;
             return;
         } else if (_op == "add" || _op == "or") {
