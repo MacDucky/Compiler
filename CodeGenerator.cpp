@@ -4,7 +4,6 @@
 #include <list>
 #include <regex>
 #include <algorithm>
-#include <map>
 
 using namespace std;
 
@@ -76,6 +75,7 @@ public:
 };
 
 /**********************************************************************************************************************/
+
 
 class Variable {
 
@@ -459,7 +459,7 @@ SymbolTable ST;
 
 list<Variable> add_struct_subfields(Variable v) {
     string type = v.getType();
-    if (type.find('*') != string::npos) { // pointer
+    if(type.find('*') != string::npos){ // pointer
         return list<Variable>();
     }
     const StructDef &s_def = ST.get_struct_definition(type);
@@ -472,7 +472,6 @@ list<Variable> add_struct_subfields(Variable v) {
     }
     return fields;
 }
-
 
 class TreeNode { //base class
 public:
@@ -493,13 +492,6 @@ public:
         if (son2 != nullptr) son2->gencode(c_type);
     };
 
-    virtual bool is_const() const {
-        return son1->is_const() && son2->is_const();
-    }
-
-    bool is_leaf() const {
-        return !son1 && !son2;
-    }
 };
 
 /*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
@@ -816,12 +808,11 @@ int If::_ifelse_end_label_idx = 0;
 
 
 class Ternary : public TreeNode {
-    static int _cond_else_idx;
-
-    static int _condLabel_end_idx;
-public:
     TreeNode *_else_ret;
 
+    static int _cond_else_idx;
+    static int _condLabel_end_idx;
+public:
     Ternary(treenode *cond, treenode *then_ret, treenode *otherwise_ret) : TreeNode(obj_tree(cond),
                                                                                     obj_tree(then_ret)),
                                                                            _else_ret(obj_tree(otherwise_ret)) {}
@@ -849,57 +840,16 @@ int Ternary::_condLabel_end_idx = 0;
 
 /* Notice that this class expects rhs expressions. */
 class BinOp : public TreeNode {
-    bool is_const;
-    double value;
 protected:
     string _op;
 public:
     explicit BinOp(const string &pcode_op, treenode *left, treenode *right) : TreeNode(nullptr, nullptr),
                                                                               _op(pcode_op) {
-        using namespace TreeUtils;
-        is_const = MathOpts::is_const_expr(left) && MathOpts::is_const_expr(right);
-        if (is_const) {
-            double lhs = MathOpts::calc_val_expr(left);
-            double rhs = MathOpts::calc_val_expr(right);
-            if (_op == "add") {
-                value = lhs + rhs;
-            } else if (_op == "sub") {
-                value = lhs - rhs;
-            } else if (_op == "div") {
-                value = lhs / rhs;
-            } else if (_op == "mul") {
-                value = lhs * rhs;
-            } else if (_op == "and") {
-                value = lhs && rhs;
-            } else if (_op == "or") {
-                value = lhs || rhs;
-            } else if (_op == "grt") {
-                value = lhs > rhs;
-            } else if (_op == "les") {
-                value = lhs < rhs;
-            } else if (_op == "equ") {
-                value = lhs == rhs;
-            } else if (_op == "neq") {
-                value = lhs != rhs;
-            } else if (_op == "leq") {
-                value = lhs <= rhs;
-            } else if (_op == "geq") {
-                value = lhs >= rhs;
-            } else {
-                cout << "BIN OP ERROR" << endl;
-                exit(-1);
-            }
-        }
         son1 = obj_tree(left);
         son2 = obj_tree(right);
     }
 
     void gencode(string c_type) override {
-        if (is_const) {
-            cout << fixed;
-            cout.precision(6);
-            cout << "ldc " << value << endl;
-        }
         if (!son1 && son2) { //only case is when its ' -x '
             son2->gencode("coder");
             cout << "neg" << endl;
@@ -1237,150 +1187,6 @@ public:
         cout << "ind" << endl;
     }
 };
-
-
-/*******************************************   Tree Utils   ***********************************************************/
-namespace TreeUtils {
-    struct MathOpts {
-        static bool is_const_expr(TreeNode *expr) {
-            const type_info &expr_type = typeid(*expr);
-            if (expr_type == typeid(xxOp) || expr_type == typeid(Opxx)) {
-                return false;
-            }
-
-            if_node *constantNode = (if_node *) expr;
-
-            if (is_zero_expr(expr)) {
-                return true;
-            }
-
-            if (expr_type == typeid(Id)) {
-                return false;
-            } else {
-                return true;
-            }
-
-            if (expr_type == typeid(Ternary)) {
-                if (is_const_expr(static_cast<Ternary *>(expr)->son1)) {
-                    if (is_zero_expr(static_cast<Ternary *>(expr)->son1)) {
-                        return is_const_expr(static_cast<Ternary *>(expr)->_else_ret);
-                    } else {
-                        return is_const_expr(static_cast<Ternary *>(expr)->son2);
-                    }
-                }
-                return false;
-            }
-            return is_const_expr(expr->son1) && is_const_expr(expr->son2);
-        }
-
-        static bool is_zero_expr(treenode *expr) {
-            leafnode *first = (leafnode *) expr;
-            if_node *second = (if_node *) expr;
-            if (expr->hdr.which == LEAF_T) {
-                if (first->hdr.type == TN_INT) {
-                    if (first->data.ival == 0) {
-                        return true;
-                    }
-                }
-                if (first->hdr.type == TN_REAL) {
-                    if (first->data.dval == 0) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            switch (expr->hdr.tok) {
-                case STAR:
-                    return (is_zero_expr(expr->lnode) || is_zero_expr(expr->rnode));
-                case AND:
-                    return (is_zero_expr(expr->lnode) || is_zero_expr(expr->rnode));
-                case DIV:
-                    return is_zero_expr(expr->lnode);
-            }
-            if (!is_const_expr(expr->lnode) || !is_const_expr(expr->rnode)) {
-                return false;
-            }
-            if (expr->hdr.type == TN_COND_EXPR) {
-                return !(calc_val_expr(second->cond) ? calc_val_expr(second->then_n) : calc_val_expr(second->else_n));
-            }
-            switch (expr->hdr.tok) {
-                case MINUS:
-                    return (calc_val_expr(expr->lnode) == calc_val_expr(expr->rnode));
-                case PLUS:
-                    return !(calc_val_expr(expr->lnode) + calc_val_expr(expr->rnode));
-                case OR:
-                    return (is_zero_expr(expr->lnode) && is_zero_expr(expr->rnode));
-                case GRTR:
-                    return calc_val_expr(expr->rnode) >= calc_val_expr(expr->lnode);
-                case LESS:
-                    return calc_val_expr(expr->rnode) <= calc_val_expr(expr->lnode);
-                case GRTR_EQ:
-                    return calc_val_expr(expr->lnode) < calc_val_expr(expr->rnode);
-                case LESS_EQ:
-                    return calc_val_expr(expr->rnode) > calc_val_expr(expr->lnode);
-                case NOT:
-                    return !(!calc_val_expr(expr->rnode));
-            }
-        }
-
-        static double calc_val_expr(treenode *expr) {
-            int left;
-            leafnode *leaf = (leafnode *) expr;
-            if_node *ifn = (if_node *) expr;
-            if (expr == NULL) {
-                return false;
-            }
-            if (is_zero_expr(expr)) {
-                return false;
-            }
-            if (expr->hdr.which != LEAF_T) {
-                if (expr->hdr.type == TN_COND_EXPR) {
-                    if (is_const_expr(ifn->cond)) {
-                        if (is_zero_expr(ifn->cond)) {
-                            return calc_val_expr(ifn->else_n);
-                        } else {
-                            return calc_val_expr(ifn->then_n);
-                        }
-                    }
-                    return false;
-                }
-                left = calc_val_expr(expr->lnode);
-                switch (expr->hdr.tok) {
-                    case STAR:
-                        return left * calc_val_expr(expr->rnode);
-                    case DIV:
-                        return left / calc_val_expr(expr->rnode);
-                    case MINUS:
-                        return left - calc_val_expr(expr->rnode);
-                    case PLUS:
-                        return left + calc_val_expr(expr->rnode);
-                    case AND:
-                        return left && calc_val_expr(expr->rnode);
-                    case OR:
-                        return left || calc_val_expr(expr->rnode);
-                    case GRTR:
-                        return left > calc_val_expr(expr->rnode);
-                    case LESS:
-                        return left < calc_val_expr(expr->rnode);
-                    case GRTR_EQ:
-                        return left >= calc_val_expr(expr->rnode);
-                    case LESS_EQ:
-                        return left <= calc_val_expr(expr->rnode);
-                    case NOT:
-                        return !calc_val_expr(expr->rnode);
-                }
-            }
-            if (leaf->hdr.type == TN_INT) {
-                return (double) leaf->data.ival;
-            } else {
-                return leaf->data.dval;
-            }
-        }
-    };
-}
-
-
-/**********************************************************************************************************************/
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
