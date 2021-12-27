@@ -4,6 +4,7 @@
 #include <list>
 #include <regex>
 #include <algorithm>
+#include <iomanip>
 
 using namespace std;
 
@@ -441,21 +442,17 @@ public:
     }
 
     const StructDef &get_struct_definition(string struct_type) const {
-//        auto remove_stars = [](const string &str, char c) {
-//            string result;
-//            for (size_t i = 0; i < str.size(); i++) {
-//                char currentChar = str[i];
-//                if (currentChar != c)
-//                    result += currentChar;
-//            }
-//            return result;
-//        };
         return sd.find_def(struct_type);
     }
 };
 
 SymbolTable ST;
 
+//ostream& operator<<(ostream& os, double val)
+//{
+//    os << dt.mo << '/' << dt.da << '/' << dt.yr;
+//    return os;
+//}
 
 list<Variable> add_struct_subfields(Variable v) {
     string type = v.getType();
@@ -889,6 +886,12 @@ public:
             cout << "ldc " << calculate_value(this) << endl;
             return;
         } else if (_op == "add" || _op == "or") {
+            if (_op == "or"){
+                if ((is_constant(son1) && !is_zero_expr(son1)) || (is_constant(son2) && !is_zero_expr(son2))){
+                    cout << "ldc 1" << endl;
+                    return;
+                }
+            }
             if (is_constant(son1) && is_zero_expr(son1)) {
                 son2->gencode("coder");
                 return;
@@ -897,6 +900,11 @@ public:
                 return;
             }
         } else if (_op == "sub") {
+            if (is_constant(son1) && is_zero_expr(son1)) {
+                son2->gencode("coder");
+                cout << "neg" << endl;
+                return;
+            }
             if (is_constant(son2) && is_zero_expr(son2)) {
                 son1->gencode("coder");
                 return;
@@ -1384,6 +1392,18 @@ bool is_zero_expr(TreeNode *expr) {
         return calculate_value(expr->son2) == 0;
     }
 
+    if (node_t == typeid(BinOp) &&
+        (static_cast<BinOp *>(expr)->get_op() == "mul" || static_cast<BinOp *>(expr)->get_op() == "and" ||
+         static_cast<BinOp *>(expr)->get_op() == "div")) {
+        BinOp *operation = static_cast<BinOp *>(expr);
+        const string &op = operation->get_op();
+        if (op == "mul" || op == "and") {
+            return is_zero_expr(operation->son1) || is_zero_expr(operation->son2);
+        } else if (op == "div") {
+            return is_zero_expr(operation->son1);
+        }
+    }
+
     if (!is_constant(expr->son1) || !is_constant(expr->son2)) {
         return false;
     }
@@ -1396,11 +1416,11 @@ bool is_zero_expr(TreeNode *expr) {
     if (node_t == typeid(BinOp)) {
         BinOp *operation = static_cast<BinOp *>(expr);
         const string &op = operation->get_op();
-        if (op == "mul" || op == "and") {
-            return is_zero_expr(operation->son1) || is_zero_expr(operation->son2);
-        } else if (op == "div") {
-            return is_zero_expr(operation->son1);
-        } else if (op == "add" || op == "or") {
+//        if (op == "mul" || op == "and") {
+//            return is_zero_expr(operation->son1) || is_zero_expr(operation->son2);
+//        } else if (op == "div") {
+//            return is_zero_expr(operation->son1);
+        if (op == "add" || op == "or") {
             return is_zero_expr(operation->son1) && is_zero_expr(operation->son2);
         } else if (op == "sub" || op == "neq") {
             return calculate_value(operation->son1) == calculate_value(operation->son2);
@@ -1418,7 +1438,9 @@ bool is_zero_expr(TreeNode *expr) {
             return is_zero_expr(operation->son2);
         }
     }
-    cout << "Mishandled " << __FUNCTION__ << " case" << endl;
+
+    cout << "Mishandled " << __FUNCTION__ << " case" <<
+         endl;
     return false;
 }
 
