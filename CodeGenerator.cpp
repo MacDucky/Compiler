@@ -888,7 +888,7 @@ public:
         if (is_constant(this)) {    // handles the unary ' - ' sign too.
             cout << "ldc " << calculate_value(this) << endl;
             return;
-        } else if (_op == "add") {
+        } else if (_op == "add" || _op == "or") {
             if (is_constant(son1) && is_zero_expr(son1)) {
                 son2->gencode("coder");
                 return;
@@ -901,7 +901,7 @@ public:
                 son1->gencode("coder");
                 return;
             }
-        } else if (_op == "mul") {
+        } else if (_op == "mul" || _op == "and") {
             if ((is_constant(son1) && is_zero_expr(son1)) || (is_constant(son2) && is_zero_expr(son2))) {
                 cout << "ldc 0" << endl;
                 return;
@@ -910,6 +910,14 @@ public:
                 return;
             } else if (is_constant(son2) && calculate_value(son2) == 1) {
                 son1->gencode("coder");
+                return;
+            }
+        } else if (_op == "div") {
+            if (is_constant(son2) && calculate_value(son2) == 1) {
+                son1->gencode("coder");
+                return;
+            } else if (is_constant(son1) && is_zero_expr(son1)) {
+                cout << "ldc 0" << endl;
                 return;
             }
         }
