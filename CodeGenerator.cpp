@@ -459,7 +459,7 @@ SymbolTable ST;
 
 list<Variable> add_struct_subfields(Variable v) {
     string type = v.getType();
-    if(type.find('*') != string::npos){ // pointer
+    if (type.find('*') != string::npos) { // pointer
         return list<Variable>();
     }
     const StructDef &s_def = ST.get_struct_definition(type);
@@ -763,12 +763,13 @@ public:
 int DoWhile::_dowhile_loop_label_idx = 0;
 
 class If : public TreeNode {
-    TreeNode *_else_do;
 
     static int _if_end_label_idx;
     static int _ifelse_else_label_idx;
     static int _ifelse_end_label_idx;
 public:
+    TreeNode *_else_do;
+
     If(treenode *cond, treenode *thenDo, treenode *elseDo = nullptr) : TreeNode(obj_tree(cond), obj_tree(thenDo)),
                                                                        _else_do(obj_tree(elseDo)) {}
 
@@ -808,11 +809,11 @@ int If::_ifelse_end_label_idx = 0;
 
 
 class Ternary : public TreeNode {
-    TreeNode *_else_ret;
-
     static int _cond_else_idx;
     static int _condLabel_end_idx;
 public:
+    TreeNode *_else_ret;
+
     Ternary(treenode *cond, treenode *then_ret, treenode *otherwise_ret) : TreeNode(obj_tree(cond),
                                                                                     obj_tree(then_ret)),
                                                                            _else_ret(obj_tree(otherwise_ret)) {}
@@ -1187,6 +1188,98 @@ public:
         cout << "ind" << endl;
     }
 };
+
+bool is_zero_expr(TreeNode* root) {
+    leafnode* first = (leafnode*)root;
+    if_node* second = (if_node*)root;
+    if (root->hdr.which == LEAF_T) {
+        if (first->hdr.type == TN_INT) {
+            if (first->data.ival == 0) {
+                return 1;
+            }
+        }
+        if (first->hdr.type == TN_REAL) {
+            if (first->data.dval == 0) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    switch (root->hdr.tok) { //check to return value from each mathematic arithmetic call recursively to both sons
+        case STAR:
+            return (is_zero_expr(root->lnode) || is_zero_expr(root->rnode));
+        case AND:
+            return (is_zero_expr(root->lnode) || is_zero_expr(root->rnode));
+        case DIV:
+            return is_zero_expr(root->lnode);
+    }
+    if (!is_constant(root->lnode) || !is_constant(root->rnode)) {
+        return 0;
+    }
+    if (root->hdr.type == TN_COND_EXPR) {
+        return !(calculate_value(second->cond) ? calculate_value(second->then_n) : calculate_value(second->else_n));
+    }
+    switch (root->hdr.tok) {
+        case MINUS:
+            return (calculate_value(root->lnode) == calculate_value(root->rnode));
+        case PLUS:
+            return !(calculate_value(root->lnode) + calculate_value(root->rnode));
+        case OR:
+            return (isItZero(root->lnode) && isItZero(root->rnode));
+        case GRTR:
+            return calculate_value(root->rnode) >= calculate_value(root->lnode);
+        case LESS:
+            return calculate_value(root->rnode) <= calculate_value(root->lnode);
+        case GRTR_EQ:
+            return calculate_value(root->lnode) < calculate_value(root->rnode);
+        case LESS_EQ:
+            return calculate_value(root->rnode) > calculate_value(root->lnode);
+        case NOT:
+            return !(!calculate_value(root->rnode));
+    }
+}
+
+bool is_constant(TreeNode *expression) {
+    const type_info &node_t = typeid(*expression);
+
+    if_node *constantNode = (if_node *) expression;
+    if (node_t == typeid(xxOp) || node_t == typeid(Opxx)) {
+        return false;
+    }
+    if (isItZero(expression)) {
+        return true;
+    }
+
+    if (node_t == typeid(Id))
+        return false;
+
+    if (node_t == typeid(RealNum) || node_t == typeid(Num))
+        return true;
+
+    if (node_t == typeid(Ternary)) {
+        if (is_constant(static_cast<Ternary *>(expression)->son1)) { //check if the condition expression is a const value
+            if (isItZero(static_cast<Ternary *>(expression)->son1)) { //check if thr consdition expression is equal to 0
+                return is_constant(static_cast<Ternary *>(expression)->_else_ret); //check if the else is const expresion
+            } else {
+                return is_constant(static_cast<Ternary *>(expression)->son2);
+            }
+        }
+        return false;
+    }
+
+    if (node_t == typeid(If)) {
+        if (is_constant(static_cast<If *>(expression)->son1)) { //check if the condition expression is a const value
+            if (isItZero(static_cast<If *>(expression)->son1)) { //check if thr consdition expression is equal to 0
+                return is_constant(static_cast<If *>(expression)->_else_do); //check if the else is const expresion
+            } else {
+                return is_constant(static_cast<If *>(expression)->son2);
+            }
+        }
+        return false;
+    }
+
+    return is_constant(expression->son1) && is_constant(expression->son2);
+}
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
 
