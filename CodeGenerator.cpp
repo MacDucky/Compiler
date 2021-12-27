@@ -885,6 +885,35 @@ public:
     const string &get_op() const { return _op; }
 
     void gencode(string c_type) override {
+        if (is_constant(this)) {    // handles the unary ' - ' sign too.
+            cout << "ldc " << calculate_value(this) << endl;
+            return;
+        } else if (_op == "add") {
+            if (is_constant(son1) && is_zero_expr(son1)) {
+                son2->gencode("coder");
+                return;
+            } else if (is_constant(son2) && is_zero_expr(son2)) {
+                son1->gencode("coder");
+                return;
+            }
+        } else if (_op == "sub") {
+            if (is_constant(son2) && is_zero_expr(son2)) {
+                son1->gencode("coder");
+                return;
+            }
+        } else if (_op == "mul") {
+            if ((is_constant(son1) && is_zero_expr(son1)) || (is_constant(son2) && is_zero_expr(son2))) {
+                cout << "ldc 0" << endl;
+                return;
+            } else if (is_constant(son1) && calculate_value(son1) == 1) {
+                son2->gencode("coder");
+                return;
+            } else if (is_constant(son2) && calculate_value(son2) == 1) {
+                son1->gencode("coder");
+                return;
+            }
+        }
+
         if (!son1 && son2) { //only case is when its ' -x '
             son2->gencode("coder");
             cout << "neg" << endl;
@@ -893,6 +922,7 @@ public:
             if (son2 != nullptr) son2->gencode("coder");
             cout << _op << endl;
         }
+
     }
 };
 
