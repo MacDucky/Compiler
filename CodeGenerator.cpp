@@ -496,6 +496,9 @@ public:
 
 /*******************************************************    IMPLEMENTATION ZONE     ***************************************************************/
 TreeNode *obj_tree(treenode *root);
+bool is_constant(TreeNode *expr);
+bool is_zero_expr(TreeNode *expr);
+double calculate_value(TreeNode *expr);
 
 /*
  * Generic class to have the option to collect according to tree structure.
@@ -850,6 +853,8 @@ public:
         son2 = obj_tree(right);
     }
 
+    const string &get_op() const { return _op; }
+
     void gencode(string c_type) override {
         if (!son1 && son2) { //only case is when its ' -x '
             son2->gencode("coder");
@@ -998,6 +1003,8 @@ public:
 
     explicit Num(int number) : TreeNode(), value(number) {}
 
+    explicit operator int() const { return value; }
+
     virtual void gencode(string c_type) {
         cout << "ldc " << getValue() << endl;
     }
@@ -1009,6 +1016,8 @@ public:
     RealNum(double value) : TreeNode(), value(value) {}
 
     double getValue() const { return value; }
+
+    explicit operator double() const { return value; }
 
     virtual void gencode(string c_type) {
         cout << fixed;
@@ -1189,64 +1198,145 @@ public:
     }
 };
 
-bool is_zero_expr(TreeNode* root) {
-    leafnode* first = (leafnode*)root;
-    if_node* second = (if_node*)root;
-    if (root->hdr.which == LEAF_T) {
-        if (first->hdr.type == TN_INT) {
-            if (first->data.ival == 0) {
-                return 1;
-            }
-        }
-        if (first->hdr.type == TN_REAL) {
-            if (first->data.dval == 0) {
-                return 1;
+double calculate_value(TreeNode *expr) {
+    if (!expr) {
+        return false;
+    }
+
+    const type_info &node_t = typeid(*expr);
+
+    if (is_zero_expr(expr)) {
+        return false;
+    }
+
+    if (node_t == typeid(Ternary)) {
+        Ternary *ternary = static_cast<Ternary *>(expr);
+        if (is_constant(ternary->son1)) {
+            if (is_zero_expr(ternary->son1)) {
+                return calculate_value(ternary->_else_ret);
+            } else {
+                return calculate_value(ternary->son2);
             }
         }
         return 0;
     }
-    switch (root->hdr.tok) { //check to return value from each mathematic arithmetic call recursively to both sons
-        case STAR:
-            return (is_zero_expr(root->lnode) || is_zero_expr(root->rnode));
-        case AND:
-            return (is_zero_expr(root->lnode) || is_zero_expr(root->rnode));
-        case DIV:
-            return is_zero_expr(root->lnode);
+
+    if (node_t == typeid(Num))
+        return int(*static_cast<Num *>(expr));
+    if (node_t == typeid(RealNum))
+        return double(*static_cast<RealNum *>(expr));
+
+    if (node_t == typeid(BinOp) && static_cast<BinOp *>(expr)->get_op() == "neg")
+        return -calculate_value(expr->son2);
+
+    if (node_t == typeid(Not))
+        return !calculate_value(expr->son2);
+
+    /* Assuming we covered all the weird cases that are not binary */
+    double left_res = calculate_value(expr->son1);
+    double right_res = calculate_value(expr->son2);
+
+    if (node_t == typeid(BinOp)) {
+        BinOp *operation = static_cast<BinOp *>(expr);
+        const string &op = operation->get_op();
+        if (op == "add") {
+            return left_res + right_res;
+        } else if (op == "sub") {
+            return left_res - right_res;
+        } else if (op == "mul") {
+            return left_res * right_res;
+        } else if (op == "div") {
+            return left_res / right_res;
+        } else if (op == "and") {
+            return left_res && right_res;
+        } else if (op == "or") {
+            return left_res || right_res;
+        } else if (op == "grt") {
+            return left_res > right_res;
+        } else if (op == "les") {
+            return left_res < right_res;
+        } else if (op == "geq") {
+            return left_res >= right_res;
+        } else if (op == "leq") {
+            return left_res <= right_res;
+        } else if (op == "equ") {
+            return left_res == right_res;
+        } else if (op == "neq") {
+            return left_res != right_res;
+        }
     }
-    if (!is_constant(root->lnode) || !is_constant(root->rnode)) {
-        return 0;
-    }
-    if (root->hdr.type == TN_COND_EXPR) {
-        return !(calculate_value(second->cond) ? calculate_value(second->then_n) : calculate_value(second->else_n));
-    }
-    switch (root->hdr.tok) {
-        case MINUS:
-            return (calculate_value(root->lnode) == calculate_value(root->rnode));
-        case PLUS:
-            return !(calculate_value(root->lnode) + calculate_value(root->rnode));
-        case OR:
-            return (isItZero(root->lnode) && isItZero(root->rnode));
-        case GRTR:
-            return calculate_value(root->rnode) >= calculate_value(root->lnode);
-        case LESS:
-            return calculate_value(root->rnode) <= calculate_value(root->lnode);
-        case GRTR_EQ:
-            return calculate_value(root->lnode) < calculate_value(root->rnode);
-        case LESS_EQ:
-            return calculate_value(root->rnode) > calculate_value(root->lnode);
-        case NOT:
-            return !(!calculate_value(root->rnode));
-    }
+    cout << "Mishandled " << __FUNCTION__ << " case" << endl;
+    return false;
 }
 
-bool is_constant(TreeNode *expression) {
-    const type_info &node_t = typeid(*expression);
+bool is_zero_expr(TreeNode *expr) {
+    const type_info &node_t = typeid(*expr);
 
-    if_node *constantNode = (if_node *) expression;
+    /* Handling leaf cases. */
+    if (node_t == typeid(Num)) {
+        if (int(*static_cast<Num *>(expr)) == 0) {
+            return true;
+        }
+        return false;
+    }
+    if (node_t == typeid(RealNum)) {
+        if (double(*static_cast<RealNum *>(expr)) == 0) {
+            return true;
+        }
+        return false;
+    }
+    if (node_t == typeid(Id))
+        return false;
+
+    if (node_t == typeid(Not) || (node_t == typeid(BinOp) && static_cast<BinOp *>(expr)->get_op() == "neg"))
+        return !is_zero_expr(expr->son2);
+
+    if (!is_constant(expr->son1) || !is_constant(expr->son2)) {
+        return false;
+    }
+
+    if (node_t == typeid(Ternary)) {
+        Ternary *ternary = static_cast<Ternary *>(expr);
+        return !(calculate_value(ternary->son1) ? calculate_value(ternary->son2) : calculate_value(ternary->_else_ret));
+    }
+
+    if (node_t == typeid(BinOp)) {
+        BinOp *operation = static_cast<BinOp *>(expr);
+        const string &op = operation->get_op();
+        if (op == "mul" || op == "and") {
+            return is_zero_expr(operation->son1) || is_zero_expr(operation->son2);
+        } else if (op == "div") {
+            return is_zero_expr(operation->son1);
+        } else if (op == "add" || op == "or") {
+            return is_zero_expr(operation->son1) && is_zero_expr(operation->son2);
+        } else if (op == "sub" || op == "neq") {
+            return calculate_value(operation->son1) == calculate_value(operation->son2);
+        } else if (op == "grt") {
+            return calculate_value(operation->son1) <= calculate_value(operation->son2);
+        } else if (op == "les") {
+            return calculate_value(operation->son1) >= calculate_value(operation->son2);
+        } else if (op == "geq") {
+            return calculate_value(operation->son1) < calculate_value(operation->son2);
+        } else if (op == "leq") {
+            return calculate_value(operation->son1) > calculate_value(operation->son2);
+        } else if (op == "equ") {
+            return calculate_value(operation->son1) != calculate_value(operation->son2);
+        } else if (op == "neg") {
+            return is_zero_expr(operation->son2);
+        }
+    }
+    cout << "Mishandled " << __FUNCTION__ << " case" << endl;
+    return false;
+}
+
+bool is_constant(TreeNode *expr) {
+    const type_info &node_t = typeid(*expr);
+
+    if_node *constantNode = (if_node *) expr;
     if (node_t == typeid(xxOp) || node_t == typeid(Opxx)) {
         return false;
     }
-    if (isItZero(expression)) {
+    if (is_zero_expr(expr)) {
         return true;
     }
 
@@ -1257,28 +1347,19 @@ bool is_constant(TreeNode *expression) {
         return true;
 
     if (node_t == typeid(Ternary)) {
-        if (is_constant(static_cast<Ternary *>(expression)->son1)) { //check if the condition expression is a const value
-            if (isItZero(static_cast<Ternary *>(expression)->son1)) { //check if thr consdition expression is equal to 0
-                return is_constant(static_cast<Ternary *>(expression)->_else_ret); //check if the else is const expresion
+        if (is_constant(
+                static_cast<Ternary *>(expr)->son1)) { //check if the condition expr is a const value
+            if (is_zero_expr(
+                    static_cast<Ternary *>(expr)->son1)) { //check if thr consdition expr is equal to 0
+                return is_constant(
+                        static_cast<Ternary *>(expr)->_else_ret); //check if the else is const expresion
             } else {
-                return is_constant(static_cast<Ternary *>(expression)->son2);
+                return is_constant(static_cast<Ternary *>(expr)->son2);
             }
         }
         return false;
     }
-
-    if (node_t == typeid(If)) {
-        if (is_constant(static_cast<If *>(expression)->son1)) { //check if the condition expression is a const value
-            if (isItZero(static_cast<If *>(expression)->son1)) { //check if thr consdition expression is equal to 0
-                return is_constant(static_cast<If *>(expression)->_else_do); //check if the else is const expresion
-            } else {
-                return is_constant(static_cast<If *>(expression)->son2);
-            }
-        }
-        return false;
-    }
-
-    return is_constant(expression->son1) && is_constant(expression->son2);
+    return is_constant(expr->son1) && is_constant(expr->son2);
 }
 
 /*****************************************************   END OF IMPLEMENTATION ZONE   ************************************************/
