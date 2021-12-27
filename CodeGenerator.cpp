@@ -646,13 +646,17 @@ public:
     string get_var_name() const { return name; }
 };
 
+static bool switch_is_const = false;
+static double switch_value = -1;
 
 class LoopBreak : public TreeNode {
     static MyStack<string> label_refs;
 public:
     void gencode(string c_type) override {
-        const string &last_label = label_refs.top();
-        cout << "ujp " << last_label << std::endl;
+        if (!switch_is_const) {
+            const string &last_label = label_refs.top();
+            cout << "ujp " << last_label << std::endl;
+        }
     }
 
     static void AddLastLabel(const string &end_label) {
@@ -1095,15 +1099,13 @@ static int case_num = 0;
 
 class SwitchCond : public TreeNode {
 public:
-    static bool is_const;
-    static double switch_value;
 
     virtual void gencode(string c_type) {
         if (is_constant(son1)) {
-            is_const = true;
+            switch_is_const = true;
             switch_value = calculate_value(son1);
             son2->gencode("coder");
-            is_const = false;
+            switch_is_const = false;
         } else {
             if (son1 != NULL) son1->gencode("coder");
             if (son2 != NULL) son2->gencode("coder");
@@ -1116,18 +1118,17 @@ public:
     }
 };
 
-bool SwitchCond::is_const = false;
-double SwitchCond::switch_value = -1;
-
 class SwitchLabel : public TreeNode {
-    double case_val;
+//    double case_val;
 public:
-    SwitchLabel(double val) : case_val(val) {}
+//    SwitchLabel(double val) : case_val(val) {}
 
     virtual void gencode(string c_type) {
-        if (SwitchCond::is_const) {
-            if (case_val == SwitchCond::switch_value)
-                son2->gencode("coder");
+        if (switch_is_const) {
+            double case_val = calculate_value(son1);
+            if (case_val == switch_value) {
+                son2->gencode();
+            }
         } else {
             int cur_switch = switch_num;
             int cur_case = case_num;
@@ -2079,22 +2080,11 @@ TreeNode *obj_tree(treenode *root) {
                 }
 
                 case TN_LABEL: {
-                    int case_val = ((leafnode *) root->lnode->rnode)->data.ival;
-                    if (SwitchCond::is_const) {
-                        if (SwitchCond::switch_value == case_val) {
-                            TreeNode *switch_label = new SwitchLabel(case_val);
-                            switch_label->son1 = obj_tree(root->lnode);
-                            switch_label->son2 = obj_tree(root->rnode);
-                            return switch_label;
-                        } else {
-                            return new TreeNode(obj_tree(root->lnode), obj_tree(root->rnode));
-                        }
-                    } else {
-                        TreeNode *switch_label = new SwitchLabel(case_val);
-                        switch_label->son1 = obj_tree(root->lnode);
-                        switch_label->son2 = obj_tree(root->rnode);
-                        return switch_label;
-                    }
+                    TreeNode *switch_label = new SwitchLabel();
+                    switch_label->son1 = obj_tree(root->lnode);
+                    switch_label->son2 = obj_tree(root->rnode);
+                    return switch_label;
+
                 }
 
                 default: {
