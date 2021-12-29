@@ -889,7 +889,7 @@ public:
         } else if (_op == "add" || _op == "or") {
             if (_op == "or"){
                 if ((is_constant(son1) && !is_zero_expr(son1)) || (is_constant(son2) && !is_zero_expr(son2))){
-                    cout << "ldc 1" << endl;
+                    cout << "ldc 1.000000" << endl;
                     return;
                 }
             }
